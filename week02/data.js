@@ -3,16 +3,6 @@ let movies = [];
 let ratings = [];
 
 /**
- * Array of genre names in the order they appear in the u.item file
- */
-const genreNames = [
-    "Action", "Adventure", "Animation", "Children's", "Comedy",
-    "Crime", "Documentary", "Drama", "Fantasy", "Film-Noir",
-    "Horror", "Musical", "Mystery", "Romance", "Sci-Fi",
-    "Thriller", "War", "Western"
-];
-
-/**
  * Load and parse data from local files
  * @returns {Promise} Promise that resolves when data is loaded
  */
@@ -33,8 +23,6 @@ async function loadData() {
         }
         const ratingsText = await ratingsResponse.text();
         parseRatingData(ratingsText);
-        
-        console.log(`Loaded ${movies.length} movies and ${ratings.length} ratings`);
     } catch (error) {
         console.error('Error loading data:', error);
         document.getElementById('result').textContent = 
@@ -48,6 +36,13 @@ async function loadData() {
  * @param {string} text - Raw text data from u.item
  */
 function parseItemData(text) {
+    const genreNames = [
+        "Action", "Adventure", "Animation", "Children's", "Comedy",
+        "Crime", "Documentary", "Drama", "Fantasy", "Film-Noir",
+        "Horror", "Musical", "Mystery", "Romance", "Sci-Fi",
+        "Thriller", "War", "Western"
+    ];
+    
     const lines = text.split('\n').filter(line => line.trim() !== '');
     
     movies = lines.map(line => {
