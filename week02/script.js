@@ -11,10 +11,15 @@ window.onload = async function() {
         
         // Update status message
         document.getElementById('result').textContent = 
-            'Data loaded. Please select a movie.';
+            'Data loaded. Please select a movie to get recommendations.';
             
         // Add event listener to the recommendation button
         document.getElementById('recommend-btn').addEventListener('click', getRecommendations);
+        
+        // Add event listener to the hero CTA button
+        document.querySelector('.cta-button').addEventListener('click', function() {
+            document.querySelector('.recommender-section').scrollIntoView({ behavior: 'smooth' });
+        });
     } catch (error) {
         console.error('Error initializing application:', error);
     }
@@ -46,16 +51,35 @@ function populateMoviesDropdown() {
 }
 
 /**
- * Calculate Jaccard similarity between two sets
- * @param {Set} setA - First set
- * @param {Set} setB - Second set
- * @returns {number} Jaccard similarity coefficient
+ * Calculate cosine similarity between two vectors
+ * @param {Array} vectorA - First vector
+ * @param {Array} vectorB - Second vector
+ * @returns {number} Cosine similarity value
  */
-function calculateJaccardSimilarity(setA, setB) {
-    const intersection = new Set([...setA].filter(x => setB.has(x)));
-    const union = new Set([...setA, ...setB]);
+function calculateCosineSimilarity(vectorA, vectorB) {
+    // Calculate dot product
+    let dotProduct = 0;
+    for (let i = 0; i < vectorA.length; i++) {
+        dotProduct += vectorA[i] * vectorB[i];
+    }
     
-    return union.size === 0 ? 0 : intersection.size / union.size;
+    // Calculate magnitudes
+    let magnitudeA = 0;
+    let magnitudeB = 0;
+    for (let i = 0; i < vectorA.length; i++) {
+        magnitudeA += vectorA[i] * vectorA[i];
+        magnitudeB += vectorB[i] * vectorB[i];
+    }
+    magnitudeA = Math.sqrt(magnitudeA);
+    magnitudeB = Math.sqrt(magnitudeB);
+    
+    // Avoid division by zero
+    if (magnitudeA === 0 || magnitudeB === 0) {
+        return 0;
+    }
+    
+    // Return cosine similarity
+    return dotProduct / (magnitudeA * magnitudeB);
 }
 
 /**
@@ -66,9 +90,11 @@ function getRecommendations() {
     const movieSelect = document.getElementById('movie-select');
     const selectedMovieId = parseInt(movieSelect.value);
     const resultElement = document.getElementById('result');
+    const movieCardsContainer = document.getElementById('movie-cards');
     
     if (!selectedMovieId) {
         resultElement.textContent = 'Please select a movie first.';
+        movieCardsContainer.innerHTML = '';
         return;
     }
     
@@ -76,17 +102,16 @@ function getRecommendations() {
     const likedMovie = movies.find(movie => movie.id === selectedMovieId);
     if (!likedMovie) {
         resultElement.textContent = 'Selected movie not found.';
+        movieCardsContainer.innerHTML = '';
         return;
     }
     
     // Step 3: Prepare for similarity calculation
-    const likedMovieGenres = new Set(likedMovie.genres);
     const candidateMovies = movies.filter(movie => movie.id !== likedMovie.id);
     
-    // Step 4: Calculate similarity scores
+    // Step 4: Calculate similarity scores using cosine similarity
     const scoredMovies = candidateMovies.map(candidateMovie => {
-        const candidateGenres = new Set(candidateMovie.genres);
-        const score = calculateJaccardSimilarity(likedMovieGenres, candidateGenres);
+        const score = calculateCosineSimilarity(likedMovie.genreVector, candidateMovie.genreVector);
         
         return {
             ...candidateMovie,
@@ -98,13 +123,33 @@ function getRecommendations() {
     scoredMovies.sort((a, b) => b.score - a.score);
     
     // Step 6: Select top recommendations
-    const topRecommendations = scoredMovies.slice(0, 2);
+    const topRecommendations = scoredMovies.slice(0, 6);
     
     // Step 7: Display results
     if (topRecommendations.length > 0) {
-        const recommendationTitles = topRecommendations.map(movie => movie.title);
-        resultElement.innerHTML = `Because you liked '<strong>${likedMovie.title}</strong>', we recommend: <strong>${recommendationTitles.join('</strong>, <strong>')}</strong>`;
+        resultElement.innerHTML = `Because you liked <strong>"${likedMovie.title}"</strong>, we recommend:`;
+        
+        // Create movie cards
+        movieCardsContainer.innerHTML = '';
+        topRecommendations.forEach(movie => {
+            const movieCard = document.createElement('div');
+            movieCard.className = 'movie-card';
+            
+            movieCard.innerHTML = `
+                <div class="movie-poster">
+                    <i class="fas fa-film fa-3x"></i>
+                </div>
+                <div class="movie-info">
+                    <div class="movie-title">${movie.title}</div>
+                    <div class="movie-genres">${movie.genres.join(', ')}</div>
+                    <div class="movie-similarity">Similarity: ${(movie.score * 100).toFixed(1)}%</div>
+                </div>
+            `;
+            
+            movieCardsContainer.appendChild(movieCard);
+        });
     } else {
         resultElement.textContent = 'No recommendations found.';
+        movieCardsContainer.innerHTML = '';
     }
 }
