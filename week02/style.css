@@ -13,45 +13,17 @@ html, body { height: 100%; }
   --accent-strong: #1286db;
   --border: #1f2a3a;
   --shadow: rgba(0,0,0,.45);
-
-  /* animated hero hue */
-  --heroHue: 0deg;
 }
 
-/* ======= Netflix-like animated backdrop ======= */
 body{
   margin: 0;
+  background:
+    radial-gradient(900px 400px at 20% -10%, #12233a 0%, transparent 60%),
+    linear-gradient(180deg, #0a1728 0%, transparent 30%),
+    linear-gradient(180deg, var(--bg1), var(--bg0));
   color: var(--text);
   font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
-  background: #0b1120;     /* base in case pseudo-element fails */
-  position: relative;
-  overflow-x: hidden;
 }
-body::before{
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(1200px 600px at 50% -10%, rgba(0,0,0,0.15), rgba(0,0,0,0.45) 55%, rgba(0,0,0,0.75) 100%),
-    repeating-linear-gradient(-18deg,
-      rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 24px,
-      rgba(255,255,255,0.04) 24px, rgba(255,255,255,0.04) 120px,
-      rgba(0,0,0,0.02) 120px, rgba(0,0,0,0.02) 180px,
-      rgba(0,0,0,0) 180px, rgba(0,0,0,0) 240px),
-    repeating-linear-gradient(18deg,
-      rgba(255,255,255,0.035) 0px, rgba(255,255,255,0.035) 22px,
-      rgba(255,255,255,0.02) 22px, rgba(255,255,255,0.02) 110px,
-      rgba(0,0,0,0) 110px, rgba(0,0,0,0) 170px),
-    radial-gradient(120% 120% at 30% 20%, #ff0033, #111827 60%),
-    linear-gradient(180deg, #0b1120, #070a13);
-  filter: hue-rotate(var(--heroHue)) saturate(120%);
-  transition: filter 900ms ease;
-}
-
-/* Keep app content above background layer */
-.hero, .container { position: relative; z-index: 1; }
 
 /* ======= Header ======= */
 .hero{
@@ -226,4 +198,50 @@ h1{ margin: 0 0 6px; font-size: 28px; }
   height: fit-content;
   align-self: start;
 }
-.inspector__title{ margin: 0 0 6px; font-size: 18px; font-weight: 800;
+.inspector__header{
+  display: flex; justify-content: space-between; align-items: baseline;
+}
+.inspector__title{ margin: 0; font-size: 18px; font-weight: 800; }
+.inspector__subtitle{ margin: 0; color: var(--muted); font-weight: 600; }
+.muted{ color: var(--muted); }
+
+.chips{ display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 8px; }
+.chip{
+  background: #101a2c;
+  color: #cbd5e1;
+  border: 1px solid var(--border);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.section-title{
+  margin: 10px 0 4px;
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+}
+
+/* Contribution rows */
+.contrib{
+  display: grid; gap: 6px;
+}
+.contrib-row{
+  display: grid;
+  grid-template-columns: 140px 1fr 46px;
+  align-items: center;
+  gap: 8px;
+}
+.contrib-label{ font-size: 12px; color: var(--text); }
+.contrib-bar{
+  height: 8px;
+  border: 1px solid var(--border);
+  background: #0a1424;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.contrib-fill{ height: 100%; background: var(--accent); width: 0%; }
+.contrib-pct{ text-align: right; font-weight: 800; font-size: 12px; }
+
+.empty{ color: var(--muted); font-weight: 600; }
