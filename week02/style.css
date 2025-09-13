@@ -3,13 +3,13 @@
 html, body { height: 100%; }
 
 :root{
-  --bg0: #070a13;           /* deep midnight */
-  --bg1: #0b1120;           /* dark navy */
-  --panel: #0e1423;         /* panel surface */
-  --card: #141a2a;          /* card surface */
-  --text: #e5e7eb;          /* light text */
-  --muted: #9aa4b2;         /* secondary text */
-  --accent: #1ea3ff;        /* prime blue */
+  --bg0: #070a13;
+  --bg1: #0b1120;
+  --panel: #0e1423;
+  --card: #141a2a;
+  --text: #e5e7eb;
+  --muted: #9aa4b2;
+  --accent: #1ea3ff;
   --accent-strong: #1286db;
   --border: #1f2a3a;
   --shadow: rgba(0,0,0,.45);
