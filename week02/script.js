@@ -140,4 +140,174 @@ function renderInspector(liked, movie, percentMatch) {
   panel.appendChild(title);
   panel.appendChild(sub);
 
-  const breakdown = computeBreakdown(liked, movi
+  const breakdown = computeBreakdown(liked, movie);
+
+  const makeSection = (heading, items) => {
+    const t = document.createElement("p");
+    t.className = "section-title";
+    t.textContent = heading;
+    const chips = document.createElement("div");
+    chips.className = "chips";
+    if (items && items.length) {
+      items.forEach(g => { const c = document.createElement("span"); c.className="chip"; c.textContent=g; chips.appendChild(c); });
+    } else {
+      const c = document.createElement("span"); c.className="chip"; c.textContent="— none —"; chips.appendChild(c);
+    }
+    panel.appendChild(t); panel.appendChild(chips);
+  };
+
+  makeSection("Shared genres", breakdown.overlap);
+  makeSection(`Only in “${liked.title}”`, breakdown.onlyLiked);
+  makeSection("Only in recommendation", breakdown.onlyCand);
+
+  const t4 = document.createElement("p");
+  t4.className = "section-title";
+  t4.textContent = "Contribution to match";
+  panel.appendChild(t4);
+
+  const list = document.createElement("div");
+  list.className = "contrib";
+  if (breakdown.contributions.length) {
+    breakdown.contributions.forEach(({ genre, pct }) => {
+      const row = document.createElement("div");
+      row.className = "contrib-row";
+
+      const label = document.createElement("div");
+      label.className = "contrib-label";
+      label.textContent = genre;
+
+      const bar = document.createElement("div");
+      bar.className = "contrib-bar";
+      const fill = document.createElement("div");
+      fill.className = "contrib-fill";
+      fill.style.width = `${pct}%`;
+      bar.appendChild(fill);
+
+      const pctEl = document.createElement("div");
+      pctEl.className = "contrib-pct";
+      pctEl.textContent = `${pct}%`;
+
+      row.appendChild(label);
+      row.appendChild(bar);
+      row.appendChild(pctEl);
+      list.appendChild(row);
+    });
+  } else {
+    const p = document.createElement("p");
+    p.className = "empty";
+    p.textContent = "No shared genres, so cosine is 0%.";
+    list.appendChild(p);
+  }
+  panel.appendChild(list);
+}
+
+/** Build one recommendation card */
+function buildCard(movie, percentMatch, liked) {
+  const card = document.createElement("article");
+  card.className = "movie-card";
+  card.tabIndex = 0;
+  card.dataset.id = String(movie.id);
+
+  const img = document.createElement("img");
+  img.className = "poster";
+  img.src = movie.poster;
+  img.alt = movie.title;
+  img.loading = "lazy";
+
+  const footer = document.createElement("div");
+  footer.className = "movie-footer";
+
+  const h = document.createElement("h3");
+  h.className = "movie-title";
+  h.textContent = movie.title;
+
+  const badge = document.createElement("span");
+  badge.className = "badge";
+  badge.textContent = `${percentMatch}%`;
+  if (percentMatch === 100) badge.classList.add("full");
+
+  footer.appendChild(h);
+  card.appendChild(img);
+  card.appendChild(footer);
+  card.appendChild(badge);
+
+  const activate = () => {
+    document.querySelectorAll(".movie-card.selected").forEach(el => el.classList.remove("selected"));
+    card.classList.add("selected");
+    renderInspector(liked, movie, percentMatch);
+  };
+
+  card.addEventListener("click", activate);
+  card.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(); }
+  });
+
+  return card;
+}
+
+/** ====== Recommendations (Cosine) ====== */
+function getRecommendations() {
+  const select = document.getElementById("movie-select");
+  const resultEl = document.getElementById("result");
+  const grid = document.getElementById("recommendations");
+  if (!select || !grid) return;
+
+  try {
+    const selectedVal = ensureSelection();
+    const selectedId = Number.parseInt(selectedVal, 10);
+
+    if (!selectedVal || Number.isNaN(selectedId)) {
+      if (resultEl) resultEl.textContent = "Please select a movie first.";
+      clearRecommendations();
+      return;
+    }
+
+    const likedMovie = movies.find(m => Number(m.id) === selectedId);
+    if (!likedMovie) {
+      if (resultEl) resultEl.textContent = "Selected movie not found.";
+      clearRecommendations();
+      return;
+    }
+
+    currentLiked = likedMovie;
+
+    const candidates = movies.filter(m => Number(m.id) !== selectedId);
+
+    const scored = candidates.map(cand => ({
+      movie: cand,
+      score: cosineSimilarity(likedMovie.genreVector, cand.genreVector)
+    }));
+
+    scored.sort((a, b) => b.score - a.score);
+    const TOP_N = 10;
+    const top = scored.slice(0, TOP_N);
+
+    if (resultEl) resultEl.textContent = `Because you liked “${likedMovie.title}”, your similar picks:`;
+    clearRecommendations();
+
+    if (!top.length) {
+      const p = document.createElement("p");
+      p.className = "empty";
+      p.textContent = "No similar movies found.";
+      grid.appendChild(p);
+      return;
+    }
+
+    // Fill grid and auto-select the top card to show details immediately
+    let firstCard = null;
+    for (const { movie, score } of top) {
+      const percent = Math.round(score * 100);
+      const card = buildCard(movie, percent, likedMovie);
+      if (!firstCard) firstCard = { movie, percent, node: card };
+      grid.appendChild(card);
+    }
+    if (firstCard) {
+      firstCard.node.classList.add("selected");
+      renderInspector(likedMovie, firstCard.movie, firstCard.percent);
+    }
+  } catch (err) {
+    console.error(err);
+    if (resultEl) resultEl.textContent = `Error: ${err.message}`;
+    clearRecommendations();
+  }
+}
