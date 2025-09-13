@@ -55,11 +55,17 @@ h1 {
     background-color: #2980b9;
 }
 
+#recommend-btn:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
 #result-box {
     padding: 20px;
     background-color: #f9f9f9;
     border-radius: 4px;
     border: 1px solid #eee;
+    min-height: 50px;
 }
 
 #result {
@@ -69,6 +75,10 @@ h1 {
 
 .loading {
     color: #7f8c8d;
+}
+
+.error {
+    color: #e74c3c;
 }
 
 .recommendation-list {
@@ -85,11 +95,14 @@ h1 {
     border-bottom: none;
 }
 
-/* Highlight the different approach */
-.highlight {
+.hidden {
+    display: none;
+}
+
+#data-status {
+    margin-top: 15px;
+    padding: 10px;
     background-color: #fff3cd;
     border-left: 4px solid #ffeeba;
-    padding: 10px;
-    margin-top: 15px;
     border-radius: 4px;
 }
