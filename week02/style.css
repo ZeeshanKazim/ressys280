@@ -1,35 +1,37 @@
-/* ========== Base / Theme ========== */
+/* ======= Theme (Prime/Hotstar vibe) ======= */
 * { box-sizing: border-box; }
 html, body { height: 100%; }
 
 :root{
-  --bg: #0f1115;            /* deep cinematic background */
-  --bg-accent: #0b1320;     /* header gradient stop */
-  --card: #141821;          /* tile background */
+  --bg0: #070a13;           /* deep midnight */
+  --bg1: #0b1120;           /* dark navy */
+  --panel: #0e1423;         /* panel surface */
+  --card: #141a2a;          /* card surface */
   --text: #e5e7eb;          /* light text */
   --muted: #9aa4b2;         /* secondary text */
-  --accent: #1ea3ff;        /* prime-like blue */
-  --accent-strong: #1286db; /* hover state */
-  --border: #1f2937;
-  --shadow: rgba(0,0,0,.35);
+  --accent: #1ea3ff;        /* prime blue */
+  --accent-strong: #1286db;
+  --border: #1f2a3a;
+  --shadow: rgba(0,0,0,.45);
 }
 
 body{
   margin: 0;
-  background: radial-gradient(1200px 500px at 20% -10%, #152032 0%, var(--bg) 60%),
-              linear-gradient(180deg, var(--bg-accent) 0%, var(--bg) 40%);
+  background:
+    radial-gradient(900px 400px at 20% -10%, #12233a 0%, transparent 60%),
+    linear-gradient(180deg, #0a1728 0%, transparent 30%),
+    linear-gradient(180deg, var(--bg1), var(--bg0));
   color: var(--text);
-  font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI",
-        Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+  font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
 }
 
-/* ========== Header / Hero ========== */
+/* ======= Header ======= */
 .hero{
-  background: linear-gradient(180deg, rgba(30,163,255,.15), rgba(0,0,0,0));
+  background: linear-gradient(180deg, rgba(30,163,255,.14), rgba(0,0,0,0));
   border-bottom: 1px solid var(--border);
 }
 .hero__inner{
-  max-width: 1100px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 28px 24px 18px;
 }
@@ -39,48 +41,56 @@ body{
   gap: 8px;
   margin-bottom: 6px;
   color: var(--muted);
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: .3px;
+  text-transform: uppercase;
+  font-size: 12px;
 }
-.brand__logo{ font-size: 18px; }
-.brand__name{ opacity: .9; }
+.brand__mark{ color: var(--accent); }
+h1{ margin: 0 0 6px; font-size: 28px; }
+.subtitle{ margin: 0 0 6px; color: var(--muted); }
 
-h1{
-  margin: 0 0 6px;
-  font-size: 28px;
-}
-.subtitle{
-  margin: 0 0 8px;
-  color: var(--muted);
-}
-
-/* ========== Main Card ========== */
+/* ======= Main Container ======= */
 .container{
   width: 100%;
-  max-width: 1100px;
+  max-width: 1200px;
   margin: 16px auto 48px;
   padding: 20px 24px 28px;
-  background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.00));
+  background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));
   border: 1px solid var(--border);
   border-radius: 16px;
   box-shadow: 0 12px 40px var(--shadow);
 }
 
-/* ========== Controls ========== */
+/* ======= Controls Row ======= */
 .controls{
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr 1fr max-content;
   gap: 14px;
   align-items: end;
   margin-bottom: 16px;
 }
 .control-group{ display: grid; gap: 8px; }
-.label{
-  font-size: 14px;
-  color: var(--muted);
-}
+.label{ font-size: 13px; color: var(--muted); }
 
-select#movie-select{
+#search-input, #movie-select{
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid var(--b
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+  outline: none;
+  transition: box-shadow .15s ease, border-color .15s ease, transform .05s ease;
+}
+#search-input::placeholder{ color: #7a8595; }
+#search-input:focus, #movie-select:focus{
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(30,163,255,.22);
+}
+
+.btn{
+  padding: 11px 18px;
+  border: none;
+  border-radius: 10px;
+  background: var(-
