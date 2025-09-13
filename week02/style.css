@@ -1,54 +1,72 @@
-// Global data
-let movies = [];
-let ratings = [];
-
-/** Load MovieLens-style files (same folder) */
-async function loadData() {
-  try {
-    const itemResp = await fetch('u.item');
-    if (!itemResp.ok) throw new Error('Failed to load u.item');
-    parseItemData(await itemResp.text());
-
-    const dataResp = await fetch('u.data');
-    if (!dataResp.ok) throw new Error('Failed to load u.data');
-    parseRatingData(await dataResp.text());
-  } catch (err) {
-    console.error(err);
-    const el = document.getElementById('result');
-    if (el) el.textContent = 'Error: put u.item and u.data next to this page.';
-    throw err;
-  }
+body {
+    font-family: 'Helvetica', 'Arial', sans-serif;
+    line-height: 1.6;
+    color: #333;
+    background-color: #f4f7f6;
+    margin: 0;
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
 }
 
-/** Parse u.item into {id,title,genres[]} */
-function parseItemData(text) {
-  // MovieLens 100K has 19 flags (Unknown..Western)
-  const genreNames19 = [
-    'Unknown','Action','Adventure','Animation',"Children's",'Comedy','Crime','Documentary','Drama',
-    'Fantasy','Film-Noir','Horror','Musical','Mystery','Romance','Sci-Fi','Thriller','War','Western'
-  ];
-  movies = [];
-  for (const line of text.split('\n')) {
-    if (!line.trim()) continue;
-    const parts = line.split('|');
-    if (parts.length < 5 + 19) continue;
-    const id = parseInt(parts[0],10);
-    const title = parts[1];
-    const flags = parts.slice(-19);
-    const genres = [];
-    for (let i=0;i<flags.length;i++){
-      if (flags[i]==='1' && genreNames19[i] !== 'Unknown') genres.push(genreNames19[i]);
-    }
-    movies.push({ id, title, genres });
-  }
+.container {
+    width: 100%;
+    max-width: 800px;
+    background-color: white;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 }
 
-/** Parse u.data into rating rows */
-function parseRatingData(text) {
-  ratings = [];
-  for (const line of text.split('\n')) {
-    if (!line.trim()) continue;
-    const [u,i,r,t] = line.split('\t');
-    ratings.push({ userId:+u, itemId:+i, rating:+r, timestamp:+t });
-  }
+h1 {
+    color: #2c3e50;
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.input-group {
+    display: flex;
+    margin-bottom: 20px;
+    gap: 10px;
+}
+
+#movie-select {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 16px;
+}
+
+#recommend-btn {
+    padding: 10px 20px;
+    background-color: #3498db;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.3s;
+}
+
+#recommend-btn:hover {
+    background-color: #2980b9;
+}
+
+#result-box {
+    padding: 20px;
+    background-color: #f9f9f9;
+    border-radius: 4px;
+    border: 1px solid #eee;
+}
+
+#result {
+    margin: 0;
+    font-weight: bold;
+}
+
+.loading {
+    color: #7f8c8d;
 }
