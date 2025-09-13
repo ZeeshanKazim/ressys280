@@ -1,4 +1,4 @@
-/* UI + Cosine Similarity Recommender with Per-Genre Breakdown */
+/* UI + Cosine Similarity Recommender with Always-Visible Breakdown */
 "use strict";
 
 /** ====== Initialization ====== */
@@ -7,14 +7,12 @@ window.addEventListener("DOMContentLoaded", async () => {
   const btn = document.getElementById("recommend-btn");
 
   if (resultEl) resultEl.textContent = "Initializing…";
-
   await loadData();              // from data.js
 
   populateMoviesDropdown();
   wireSearch();
 
   if (btn) btn.addEventListener("click", getRecommendations);
-
   if (resultEl) resultEl.textContent = "Data loaded. Please select a movie.";
 });
 
@@ -25,8 +23,6 @@ function populateMoviesDropdown(list = movies) {
   if (!select) return;
 
   const prev = select.value || "";
-
-  // Clear all except placeholder
   select.querySelectorAll("option:not([value=''])").forEach((opt) => opt.remove());
 
   if (!Array.isArray(list) || list.length === 0) {
@@ -42,13 +38,10 @@ function populateMoviesDropdown(list = movies) {
     select.appendChild(opt);
   }
 
-  // Preserve selection if still present after filtering
-  if ([...select.options].some(o => o.value === prev)) {
-    select.value = prev;
-  }
+  if ([...select.options].some(o => o.value === prev)) select.value = prev;
 }
 
-/** ====== Search that filters the dropdown options ====== */
+/** ====== Search ====== */
 function wireSearch() {
   const input = document.getElementById("search-input");
   const select = document.getElementById("movie-select");
@@ -83,7 +76,6 @@ function clearRecommendations() {
   if (grid) grid.innerHTML = "";
 }
 
-/** If nothing selected (placeholder), auto-select the first real option. */
 function ensureSelection() {
   const select = document.getElementById("movie-select");
   if (!select) return null;
@@ -94,169 +86,126 @@ function ensureSelection() {
   return null;
 }
 
-/** Compute a per-genre breakdown for liked vs candidate. */
+/** Per-genre breakdown */
 function computeBreakdown(liked, cand) {
   const likedSet = new Set(liked.genres || []);
   const candSet  = new Set(cand.genres  || []);
 
-  // Shared / exclusive genres by name
   const overlap   = [...likedSet].filter(g => candSet.has(g));
   const onlyLiked = [...likedSet].filter(g => !candSet.has(g));
   const onlyCand  = [...candSet].filter(g => !likedSet.has(g));
 
-  // Each shared genre contributes equally to cosine when features are binary
   const lenA = (liked.genres || []).length;
   const lenB = (cand.genres  || []).length;
-
   const nA = Math.sqrt(lenA);
   const nB = Math.sqrt(lenB);
-  const perGenrePct = (nA > 0 && nB > 0) ? (100 / (nA * nB)) : 0; // % contribution of one shared genre
+  const perGenrePct = (nA > 0 && nB > 0) ? (100 / (nA * nB)) : 0;
 
   const contributions = overlap.map(g => ({
     genre: g,
-    pct: Math.round(perGenrePct * 10) / 10  // 1 decimal
+    pct: Math.round(perGenrePct * 10) / 10
   }));
 
   return { overlap, onlyLiked, onlyCand, contributions };
 }
 
-/** Build the <details> breakdown element with chips & bars */
 function buildBreakdownElement(likedTitle, breakdown) {
   const det = document.createElement("details");
   det.className = "breakdown";
+  det.open = true; // show by default
 
   const sum = document.createElement("summary");
-  sum.textContent = "Similarity details";
+  sum.innerHTML = `<span>Similarity details</span><span class="caret" aria-hidden="true"></span>`;
   det.appendChild(sum);
 
   const box = document.createElement("div");
   box.className = "breakdown-content";
 
-  // Shared genres
+  // Shared
   const g1 = document.createElement("div");
-  const t1 = document.createElement("p");
-  t1.className = "group-title";
-  t1.textContent = "Shared genres";
+  g1.innerHTML = `<p class="group-title">Shared genres</p>`;
   const chips1 = document.createElement("div");
   chips1.className = "chips";
-  if (breakdown.overlap.length) {
-    breakdown.overlap.forEach(g => {
-      const c = document.createElement("span");
-      c.className = "chip";
-      c.textContent = g;
-      chips1.appendChild(c);
-    });
-  } else {
-    const s = document.createElement("span");
-    s.className = "chip";
-    s.textContent = "— none —";
-    chips1.appendChild(s);
-  }
-  g1.appendChild(t1); g1.appendChild(chips1);
+  (breakdown.overlap.length ? breakdown.overlap : ["— none —"]).forEach(txt => {
+    const c = document.createElement("span"); c.className="chip"; c.textContent = txt; chips1.appendChild(c);
+  });
+  g1.appendChild(chips1);
 
-  // Only in liked movie
+  // Only liked
   const g2 = document.createElement("div");
-  const t2 = document.createElement("p");
-  t2.className = "group-title";
-  t2.textContent = `Only in “${likedTitle}”`;
+  g2.innerHTML = `<p class="group-title">Only in “${likedTitle}”</p>`;
   const chips2 = document.createElement("div");
   chips2.className = "chips";
-  if (breakdown.onlyLiked.length) {
-    breakdown.onlyLiked.forEach(g => {
-      const c = document.createElement("span");
-      c.className = "chip";
-      c.textContent = g;
-      chips2.appendChild(c);
-    });
-  } else {
-    const s = document.createElement("span");
-    s.className = "chip";
-    s.textContent = "— none —";
-    chips2.appendChild(s);
-  }
-  g2.appendChild(t2); g2.appendChild(chips2);
+  (breakdown.onlyLiked.length ? breakdown.onlyLiked : ["— none —"]).forEach(txt => {
+    const c = document.createElement("span"); c.className="chip"; c.textContent = txt; chips2.appendChild(c);
+  });
+  g2.appendChild(chips2);
 
-  // Only in candidate
+  // Only cand
   const g3 = document.createElement("div");
-  const t3 = document.createElement("p");
-  t3.className = "group-title";
-  t3.textContent = "Only in recommendation";
+  g3.innerHTML = `<p class="group-title">Only in recommendation</p>`;
   const chips3 = document.createElement("div");
   chips3.className = "chips";
-  if (breakdown.onlyCand.length) {
-    breakdown.onlyCand.forEach(g => {
-      const c = document.createElement("span");
-      c.className = "chip";
-      c.textContent = g;
-      chips3.appendChild(c);
-    });
-  } else {
-    const s = document.createElement("span");
-    s.className = "chip";
-    s.textContent = "— none —";
-    chips3.appendChild(s);
-  }
-  g3.appendChild(t3); g3.appendChild(chips3);
+  (breakdown.onlyCand.length ? breakdown.onlyCand : ["— none —"]).forEach(txt => {
+    const c = document.createElement("span"); c.className="chip"; c.textContent = txt; chips3.appendChild(c);
+  });
+  g3.appendChild(chips3);
 
-  // Contributions (bars)
+  // Contributions
   const g4 = document.createElement("div");
-  const t4 = document.createElement("p");
-  t4.className = "group-title";
-  t4.textContent = "Contribution to match";
+  g4.innerHTML = `<p class="group-title">Contribution to match</p>`;
   const list = document.createElement("div");
   list.className = "contrib";
-
   if (breakdown.contributions.length) {
-    // Sort descending by pct (equal for binary, but future-proof)
-    breakdown.contributions
-      .sort((a, b) => b.pct - a.pct)
-      .forEach(({ genre, pct }) => {
-        const row = document.createElement("div");
-        row.className = "contrib-row";
+    breakdown.contributions.forEach(({ genre, pct }) => {
+      const row = document.createElement("div");
+      row.className = "contrib-row";
 
-        const label = document.createElement("div");
-        label.className = "contrib-label";
-        label.textContent = genre;
+      const label = document.createElement("div");
+      label.className = "contrib-label";
+      label.textContent = genre;
 
-        const bar = document.createElement("div");
-        bar.className = "contrib-bar";
-        const fill = document.createElement("div");
-        fill.className = "contrib-fill";
-        fill.style.width = `${pct}%`;
-        bar.appendChild(fill);
+      const bar = document.createElement("div");
+      bar.className = "contrib-bar";
+      const fill = document.createElement("div");
+      fill.className = "contrib-fill";
+      fill.style.width = `${pct}%`;
+      bar.appendChild(fill);
 
-        const pctEl = document.createElement("div");
-        pctEl.className = "contrib-pct";
-        pctEl.textContent = `${pct}%`;
+      const pctEl = document.createElement("div");
+      pctEl.className = "contrib-pct";
+      pctEl.textContent = `${pct}%`;
 
-        row.appendChild(label);
-        row.appendChild(bar);
-        row.appendChild(pctEl);
-        list.appendChild(row);
-      });
+      row.appendChild(label);
+      row.appendChild(bar);
+      row.appendChild(pctEl);
+      list.appendChild(row);
+    });
   } else {
     const p = document.createElement("p");
     p.className = "empty";
     p.textContent = "No shared genres, so cosine is 0%.";
     list.appendChild(p);
   }
-  g4.appendChild(t4); g4.appendChild(list);
+  g4.appendChild(list);
 
-  box.appendChild(g1);
-  box.appendChild(g2);
-  box.appendChild(g3);
-  box.appendChild(g4);
+  box.appendChild(g1); box.appendChild(g2); box.appendChild(g3); box.appendChild(g4);
   det.appendChild(box);
+
+  // rotate caret on toggle (for visual feedback)
+  det.addEventListener("toggle", () => {
+    const caret = sum.querySelector(".caret");
+    if (caret) caret.style.transform = det.open ? "rotate(180deg)" : "rotate(0deg)";
+  });
 
   return det;
 }
 
-/** Create a tile (card + breakdown) */
+/** Build a tile (card + breakdown) */
 function createMovieTile(movie, percentMatch, breakdown, likedTitle) {
   const tile = document.createElement("div");
   tile.className = "movie-tile";
 
-  // Card
   const card = document.createElement("article");
   card.className = "movie-card";
   card.setAttribute("tabindex", "0");
@@ -285,12 +234,14 @@ function createMovieTile(movie, percentMatch, breakdown, likedTitle) {
   card.appendChild(footer);
   card.appendChild(badge);
 
-  // Breakdown
+  // breakdown
   const breakdownEl = buildBreakdownElement(likedTitle, breakdown);
+
+  // Clicking the card toggles the details
+  card.addEventListener("click", () => { breakdownEl.open = !breakdownEl.open; });
 
   tile.appendChild(card);
   tile.appendChild(breakdownEl);
-
   return tile;
 }
 
@@ -320,18 +271,16 @@ function getRecommendations() {
 
     const candidates = movies.filter(m => Number(m.id) !== selectedId);
 
-    const scored = candidates.map(cand => {
-      const score = cosineSimilarity(likedMovie.genreVector, cand.genreVector);
-      return { movie: cand, score };
-    });
+    const scored = candidates.map(cand => ({
+      movie: cand,
+      score: cosineSimilarity(likedMovie.genreVector, cand.genreVector)
+    }));
 
     scored.sort((a, b) => b.score - a.score);
-    const TOP_N = 10;
+    const TOP_N = 8;
     const top = scored.slice(0, TOP_N);
 
-    if (resultEl) {
-      resultEl.textContent = `Because you liked “${likedMovie.title}”, your similar picks:`;
-    }
+    if (resultEl) resultEl.textContent = `Because you liked “${likedMovie.title}”, your similar picks:`;
     clearRecommendations();
 
     if (!top.length) {
