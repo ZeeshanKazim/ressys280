@@ -3,25 +3,124 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Content-Based Movie Recommender</title>
+    <title>PrimeFlix - Movie Recommender</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
-    <div class="container">
-        <h1>Content-Based Movie Recommender</h1>
-        <p>Select a movie you like, and we'll find similar ones for you!</p>
-        
-        <div class="input-group">
-            <select id="movie-select">
-                <option value="">-- Select a Movie --</option>
-            </select>
-            <button id="recommend-btn">Get Recommendations</button>
+    <!-- Navigation Header -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <i class="fas fa-crown"></i>
+                <span>PrimeFlix</span>
+            </div>
+            <div class="nav-links">
+                <a href="#" class="nav-link">Home</a>
+                <a href="#" class="nav-link">Movies</a>
+                <a href="#" class="nav-link">TV Shows</a>
+                <a href="#" class="nav-link">My List</a>
+            </div>
+            <div class="nav-search">
+                <i class="fas fa-search"></i>
+            </div>
+            <div class="nav-profile">
+                <img src="https://via.placeholder.com/40" alt="Profile">
+            </div>
         </div>
-        
-        <div id="result-box">
-            <p id="result">Loading data, please wait...</p>
+    </nav>
+
+    <!-- Hero Banner -->
+    <div class="hero-banner">
+        <div class="hero-content">
+            <h1>Discover Your Next Favorite Movie</h1>
+            <p>Our advanced content-based recommendation system finds movies you'll love based on what you already enjoy.</p>
+            <button class="cta-button">Get Started <i class="fas fa-chevron-right"></i></button>
         </div>
     </div>
+
+    <!-- Main Content -->
+    <div class="container">
+        <div class="recommender-section">
+            <h2><i class="fas fa-film"></i> Movie Recommender</h2>
+            <p class="instructions">Select a movie you like, and we'll find similar ones for you using Cosine Similarity!</p>
+            
+            <div class="input-group">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <select id="movie-select">
+                        <option value="">Search for a movie...</option>
+                    </select>
+                </div>
+                <button id="recommend-btn" class="recommend-button">
+                    <i class="fas fa-magic"></i> Get Recommendations
+                </button>
+            </div>
+            
+            <div class="results-container">
+                <h3>Recommendations</h3>
+                <div id="result-box">
+                    <p id="result">Select a movie to get personalized recommendations</p>
+                </div>
+                <div id="movie-cards" class="movie-cards"></div>
+            </div>
+        </div>
+
+        <div class="info-section">
+            <h2><i class="fas fa-info-circle"></i> How It Works</h2>
+            <div class="info-cards">
+                <div class="info-card">
+                    <i class="fas fa-calculator"></i>
+                    <h3>Cosine Similarity</h3>
+                    <p>We use cosine similarity to measure how similar movies are based on their genre profiles, capturing both direction and magnitude.</p>
+                </div>
+                <div class="info-card">
+                    <i class="fas fa-database"></i>
+                    <h3>MovieLens Dataset</h3>
+                    <p>Our recommendations are powered by the MovieLens 100K dataset with 100,000 ratings from 943 users on 1682 movies.</p>
+                </div>
+                <div class="info-card">
+                    <i class="fas fa-user-cog"></i>
+                    <h3>Personalized</h3>
+                    <p>Get recommendations tailored specifically to your taste without needing to create an account or share personal data.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-section">
+                <h3>PrimeFlix</h3>
+                <p>The best place to discover movies you'll love</p>
+            </div>
+            <div class="footer-section">
+                <h4>Navigation</h4>
+                <a href="#">Home</a>
+                <a href="#">Movies</a>
+                <a href="#">TV Shows</a>
+                <a href="#">My List</a>
+            </div>
+            <div class="footer-section">
+                <h4>Legal</h4>
+                <a href="#">Privacy Policy</a>
+                <a href="#">Terms of Service</a>
+                <a href="#">Cookie Policy</a>
+            </div>
+            <div class="footer-section">
+                <h4>Connect</h4>
+                <div class="social-icons">
+                    <a href="#"><i class="fab fa-facebook"></i></a>
+                    <a href="#"><i class="fab fa-twitter"></i></a>
+                    <a href="#"><i class="fab fa-instagram"></i></a>
+                </div>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2023 PrimeFlix. All rights reserved.</p>
+        </div>
+    </footer>
 
     <!-- Load JavaScript files -->
     <script src="data.js"></script>
