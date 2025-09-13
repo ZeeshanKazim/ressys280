@@ -1,7 +1,7 @@
-/* UI + Cosine Similarity Recommender with Click-to-Details Modal */
+/* UI + Cosine Similarity Recommender with Animated Background + Inspector */
 "use strict";
 
-let lastLikedMovie = null; // remember the liked movie for modal breakdowns
+let currentLiked = null;
 
 /** ====== Initialization ====== */
 window.addEventListener("DOMContentLoaded", async () => {
@@ -9,16 +9,28 @@ window.addEventListener("DOMContentLoaded", async () => {
   const btn = document.getElementById("recommend-btn");
 
   if (resultEl) resultEl.textContent = "Initializing…";
-  await loadData();              // from data.js
+  await loadData(); // from data.js
 
   populateMoviesDropdown();
   wireSearch();
 
   if (btn) btn.addEventListener("click", getRecommendations);
-  wireModal(); // close interactions
+
+  // Animated Netflix-like background
+  startBackgroundHueCycle();
 
   if (resultEl) resultEl.textContent = "Data loaded. Please select a movie.";
 });
+
+/** Rotate backdrop hue every few seconds for a Netflix-like vibe */
+function startBackgroundHueCycle() {
+  const hues = [0, 20, 45, 90, 150, 210, 260, 320];
+  let i = 0;
+  const apply = () =>
+    document.documentElement.style.setProperty("--heroHue", `${hues[i]}deg`);
+  apply();
+  setInterval(() => { i = (i + 1) % hues.length; apply(); }, 4000);
+}
 
 /** ====== Dropdown population (alphabetical) ====== */
 function populateMoviesDropdown(list = movies) {
@@ -112,220 +124,20 @@ function computeBreakdown(liked, cand) {
   return { overlap, onlyLiked, onlyCand, contributions };
 }
 
-/** ====== Modal UI ====== */
-function wireModal() {
-  const modal = document.getElementById("modal");
-  const backdrop = modal.querySelector(".modal__backdrop");
-  const closeBtn = document.getElementById("modal-close");
+/** ====== Inspector rendering ====== */
+function renderInspector(liked, movie, percentMatch) {
+  const panel = document.getElementById("inspector");
+  panel.innerHTML = ""; // reset
 
-  const close = () => {
-    modal.classList.add("hidden");
-    modal.setAttribute("aria-hidden", "true");
-  };
-
-  backdrop.addEventListener("click", close);
-  closeBtn.addEventListener("click", close);
-  window.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
-
-  // expose for other functions
-  window.__closeModal = close;
-}
-
-function openModal(liked, movie, percentMatch, breakdown) {
-  const modal = document.getElementById("modal");
-  const content = document.getElementById("modal-content");
-
-  // Build content safely with DOM nodes
-  content.innerHTML = "";
-
-  // Left: poster
-  const poster = document.createElement("img");
-  poster.className = "modal__poster";
-  poster.src = movie.poster;
-  poster.alt = movie.title;
-
-  // Right: details
-  const right = document.createElement("div");
-
-  const h = document.createElement("h2");
-  h.className = "modal__title";
-  h.textContent = movie.title;
+  const title = document.createElement("h3");
+  title.className = "inspector__title";
+  title.textContent = movie.title;
 
   const sub = document.createElement("p");
-  sub.className = "modal__subtitle";
+  sub.className = "inspector__subtitle";
   sub.textContent = `Match: ${percentMatch}% — because you liked “${liked.title}”`;
 
-  // sections
-  const mkSection = (titleText, items) => {
-    const t = document.createElement("p");
-    t.className = "section-title";
-    t.textContent = titleText;
+  panel.appendChild(title);
+  panel.appendChild(sub);
 
-    const chips = document.createElement("div");
-    chips.className = "chips";
-    if (items && items.length) {
-      items.forEach(g => { const c = document.createElement("span"); c.className = "chip"; c.textContent = g; chips.appendChild(c); });
-    } else {
-      const c = document.createElement("span"); c.className = "chip"; c.textContent = "— none —"; chips.appendChild(c);
-    }
-    right.appendChild(t); right.appendChild(chips);
-  };
-
-  mkSection("Shared genres", breakdown.overlap);
-  mkSection(`Only in “${liked.title}”`, breakdown.onlyLiked);
-  mkSection("Only in recommendation", breakdown.onlyCand);
-
-  // Contributions
-  const t4 = document.createElement("p");
-  t4.className = "section-title";
-  t4.textContent = "Contribution to match";
-  right.appendChild(t4);
-
-  const list = document.createElement("div");
-  list.className = "contrib";
-  if (breakdown.contributions.length) {
-    breakdown.contributions.forEach(({ genre, pct }) => {
-      const row = document.createElement("div");
-      row.className = "contrib-row";
-
-      const label = document.createElement("div");
-      label.className = "contrib-label";
-      label.textContent = genre;
-
-      const bar = document.createElement("div");
-      bar.className = "contrib-bar";
-      const fill = document.createElement("div");
-      fill.className = "contrib-fill";
-      fill.style.width = `${pct}%`;
-      bar.appendChild(fill);
-
-      const pctEl = document.createElement("div");
-      pctEl.className = "contrib-pct";
-      pctEl.textContent = `${pct}%`;
-
-      row.appendChild(label);
-      row.appendChild(bar);
-      row.appendChild(pctEl);
-      list.appendChild(row);
-    });
-  } else {
-    const p = document.createElement("p");
-    p.className = "empty";
-    p.textContent = "No shared genres, so cosine is 0%.";
-    list.appendChild(p);
-  }
-  right.appendChild(list);
-
-  content.appendChild(poster);
-  content.appendChild(right);
-
-  modal.classList.remove("hidden");
-  modal.setAttribute("aria-hidden", "false");
-}
-
-/** ====== Build one card ====== */
-function createMovieCard(movie, percentMatch, liked) {
-  const card = document.createElement("article");
-  card.className = "movie-card";
-  card.setAttribute("tabindex", "0");
-  card.setAttribute("aria-label", `${movie.title} — ${percentMatch}% match`);
-
-  const img = document.createElement("img");
-  img.className = "poster";
-  img.src = movie.poster;
-  img.alt = movie.title;
-  img.loading = "lazy";
-
-  const footer = document.createElement("div");
-  footer.className = "movie-footer";
-
-  const h = document.createElement("h3");
-  h.className = "movie-title";
-  h.textContent = movie.title;
-
-  const badge = document.createElement("span");
-  badge.className = "badge";
-  badge.textContent = `${percentMatch}%`;
-  if (percentMatch === 100) badge.classList.add("full");
-
-  footer.appendChild(h);
-  card.appendChild(img);
-  card.appendChild(footer);
-  card.appendChild(badge);
-
-  // Click to open modal with detailed similarity
-  card.addEventListener("click", () => {
-    const breakdown = computeBreakdown(liked, movie);
-    openModal(liked, movie, percentMatch, breakdown);
-  });
-
-  // Keyboard access (Enter/Space)
-  card.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      const breakdown = computeBreakdown(liked, movie);
-      openModal(liked, movie, percentMatch, breakdown);
-    }
-  });
-
-  return card;
-}
-
-/** ====== Recommendations (Cosine) ====== */
-function getRecommendations() {
-  const select = document.getElementById("movie-select");
-  const resultEl = document.getElementById("result");
-  const grid = document.getElementById("recommendations");
-  if (!select || !grid) return;
-
-  try {
-    const selectedVal = ensureSelection();
-    const selectedId = Number.parseInt(selectedVal, 10);
-
-    if (!selectedVal || Number.isNaN(selectedId)) {
-      if (resultEl) resultEl.textContent = "Please select a movie first.";
-      clearRecommendations();
-      return;
-    }
-
-    const likedMovie = movies.find(m => Number(m.id) === selectedId);
-    if (!likedMovie) {
-      if (resultEl) resultEl.textContent = "Selected movie not found.";
-      clearRecommendations();
-      return;
-    }
-
-    lastLikedMovie = likedMovie; // remember for modal
-
-    const candidates = movies.filter(m => Number(m.id) !== selectedId);
-
-    const scored = candidates.map(cand => ({
-      movie: cand,
-      score: cosineSimilarity(likedMovie.genreVector, cand.genreVector)
-    }));
-
-    scored.sort((a, b) => b.score - a.score);
-    const TOP_N = 8;
-    const top = scored.slice(0, TOP_N);
-
-    if (resultEl) resultEl.textContent = `Because you liked “${likedMovie.title}”, your similar picks:`;
-    clearRecommendations();
-
-    if (!top.length) {
-      const p = document.createElement("p");
-      p.className = "empty";
-      p.textContent = "No similar movies found.";
-      grid.appendChild(p);
-      return;
-    }
-
-    for (const { movie, score } of top) {
-      const percent = Math.round(score * 100);
-      grid.appendChild(createMovieCard(movie, percent, likedMovie));
-    }
-  } catch (err) {
-    console.error(err);
-    if (resultEl) resultEl.textContent = `Error: ${err.message}`;
-    clearRecommendations();
-  }
-}
+  const breakdown = computeBreakdown(liked, movi
