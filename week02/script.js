@@ -46,47 +46,16 @@ function populateMoviesDropdown() {
 }
 
 /**
- * Convert genre array to binary feature vector
- * @param {Array} genres - Array of genre names
- * @param {Array} allGenres - All possible genre names
- * @returns {Array} Binary feature vector
+ * Calculate Jaccard similarity between two sets
+ * @param {Set} setA - First set
+ * @param {Set} setB - Second set
+ * @returns {number} Jaccard similarity coefficient
  */
-function getFeatureVector(genres, allGenres) {
-    return allGenres.map(genre => genres.includes(genre) ? 1 : 0);
-}
-
-/**
- * Calculate dot product of two vectors
- * @param {Array} vectorA - First vector
- * @param {Array} vectorB - Second vector
- * @returns {number} Dot product
- */
-function dotProduct(vectorA, vectorB) {
-    return vectorA.reduce((sum, val, i) => sum + val * vectorB[i], 0);
-}
-
-/**
- * Calculate magnitude of a vector
- * @param {Array} vector - Input vector
- * @returns {number} Magnitude
- */
-function magnitude(vector) {
-    return Math.sqrt(vector.reduce((sum, val) => sum + val * val, 0));
-}
-
-/**
- * Calculate cosine similarity between two vectors
- * @param {Array} vectorA - First vector
- * @param {Array} vectorB - Second vector
- * @returns {number} Cosine similarity
- */
-function calculateCosineSimilarity(vectorA, vectorB) {
-    const dot = dotProduct(vectorA, vectorB);
-    const magA = magnitude(vectorA);
-    const magB = magnitude(vectorB);
+function calculateJaccardSimilarity(setA, setB) {
+    const intersection = new Set([...setA].filter(x => setB.has(x)));
+    const union = new Set([...setA, ...setB]);
     
-    if (magA === 0 || magB === 0) return 0;
-    return dot / (magA * magB);
+    return union.size === 0 ? 0 : intersection.size / union.size;
 }
 
 /**
@@ -110,22 +79,14 @@ function getRecommendations() {
         return;
     }
     
-    // Define all possible genres
-    const allGenres = [
-        "Action", "Adventure", "Animation", "Children's", "Comedy",
-        "Crime", "Documentary", "Drama", "Fantasy", "Film-Noir",
-        "Horror", "Musical", "Mystery", "Romance", "Sci-Fi",
-        "Thriller", "War", "Western"
-    ];
-    
     // Step 3: Prepare for similarity calculation
-    const likedMovieVector = getFeatureVector(likedMovie.genres, allGenres);
+    const likedMovieGenres = new Set(likedMovie.genres);
     const candidateMovies = movies.filter(movie => movie.id !== likedMovie.id);
     
-    // Step 4: Calculate similarity scores using Cosine Similarity
+    // Step 4: Calculate similarity scores
     const scoredMovies = candidateMovies.map(candidateMovie => {
-        const candidateVector = getFeatureVector(candidateMovie.genres, allGenres);
-        const score = calculateCosineSimilarity(likedMovieVector, candidateVector);
+        const candidateGenres = new Set(candidateMovie.genres);
+        const score = calculateJaccardSimilarity(likedMovieGenres, candidateGenres);
         
         return {
             ...candidateMovie,
@@ -137,20 +98,12 @@ function getRecommendations() {
     scoredMovies.sort((a, b) => b.score - a.score);
     
     // Step 6: Select top recommendations
-    const topRecommendations = scoredMovies.slice(0, 5); // Show 5 recommendations
+    const topRecommendations = scoredMovies.slice(0, 2);
     
     // Step 7: Display results
     if (topRecommendations.length > 0) {
-        let html = `<p>Because you liked "<strong>${likedMovie.title}</strong>", we recommend:</p>`;
-        html += '<ul class="recommendation-list">';
-        
-        topRecommendations.forEach(movie => {
-            html += `<li>${movie.title} <em>(similarity: ${movie.score.toFixed(3)})</em></li>`;
-        });
-        
-        html += '</ul>';
-        html += '<p><small>Using Cosine Similarity instead of Jaccard Similarity</small></p>';
-        resultElement.innerHTML = html;
+        const recommendationTitles = topRecommendations.map(movie => movie.title);
+        resultElement.innerHTML = `Because you liked '<strong>${likedMovie.title}</strong>', we recommend: <strong>${recommendationTitles.join('</strong>, <strong>')}</strong>`;
     } else {
         resultElement.textContent = 'No recommendations found.';
     }
