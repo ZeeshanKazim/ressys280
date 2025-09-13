@@ -10,16 +10,23 @@
   <header class="hero">
     <div class="hero__inner">
       <div class="brand">
-        <span class="brand__logo">🎬</span>
+        <span class="brand__mark">▶</span>
         <span class="brand__name">Prime-Style Recs</span>
       </div>
       <h1>Content-Based Movie Recommender</h1>
-      <p class="subtitle">Select a movie you love—we’ll find the most similar ones using <strong>Cosine Similarity</strong>.</p>
+      <p class="subtitle">
+        Pick a movie you love. We’ll find look-alikes using <strong>Cosine Similarity</strong>.
+      </p>
     </div>
   </header>
 
   <main class="container">
     <section class="controls">
+      <div class="control-group">
+        <label for="search-input" class="label">Search</label>
+        <input id="search-input" type="text" placeholder="Search movies…" autocomplete="off"/>
+      </div>
+
       <div class="control-group">
         <label for="movie-select" class="label">Pick a movie</label>
         <select id="movie-select" aria-label="Movie selection">
@@ -38,7 +45,7 @@
     </section>
   </main>
 
-  <!-- Load data layer first, then UI/logic (required order) -->
+  <!-- Load data layer first, then UI/logic -->
   <script src="data.js"></script>
   <script src="script.js"></script>
 </body>
