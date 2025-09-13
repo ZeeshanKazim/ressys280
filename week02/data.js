@@ -1,57 +1,107 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Content-Based Movie Recommender</title>
-  <link rel="stylesheet" href="style.css" />
-</head>
-<body>
-  <header class="nav">
-    <div class="brand">Prime • Hotstar Style</div>
-    <input id="search" class="search" placeholder="Search movies..." />
-  </header>
+/**
+ * data.js
+ * ----------
+ * Responsible for fetching and parsing MovieLens-style data files:
+ *  - u.item : movie metadata (title + 19 binary genre flags)
+ *  - u.data : user ratings  (userId, itemId, rating, timestamp)
+ *
+ * Exposes:
+ *  - Global arrays: movies, ratings
+ *  - loadData(): async function to fetch & parse the files
+ *  - parseItemData(text), parseRatingData(text)
+ */
 
-  <main class="wrap">
-    <section class="hero">
-      <h1>Find your next favorite</h1>
-      <p class="muted">Homework: using <b>Cosine Similarity</b> over genres.</p>
+let movies = [];  // Array<{ id: number, title: string, genres: string[] }>
+let ratings = []; // Array<{ userId: number, itemId: number, rating: number, timestamp: number }>
 
-      <div class="controls">
-        <select id="movie-select" aria-label="Select a movie">
-          <option value="">— Select a Movie —</option>
-        </select>
-        <button id="recommend-btn" onclick="getRecommendations()">Get Recommendations</button>
-      </div>
+/**
+ * Fetch and parse both data files. This returns once both are loaded & parsed.
+ * In case of failure, it writes a user-friendly error message to #result.
+ */
+async function loadData() {
+  const resultEl = document.getElementById('result');
 
-      <div id="result-box">
-        <p id="result" class="muted">Loading data…</p>
-        <!-- textual list of recommended titles with exact % -->
-        <p id="rec-list" class="hidden"></p>
-      </div>
-    </section>
+  try {
+    // --- Fetch u.item (movie metadata) ---
+    const itemResp = await fetch('u.item');
+    if (!itemResp.ok) throw new Error(`Failed to load u.item (${itemResp.status})`);
+    const itemText = await itemResp.text();
+    parseItemData(itemText);
 
-    <!-- 1) RECOMMENDATIONS ABOVE TOP PICKS -->
-    <section>
-      <h2 class="row-title" id="recs-title">Because you liked…</h2>
-      <div id="row-recs" class="row"></div>
-    </section>
+    // --- Fetch u.data (ratings) ---
+    const dataResp = await fetch('u.data');
+    if (!dataResp.ok) throw new Error(`Failed to load u.data (${dataResp.status})`);
+    const dataText = await dataResp.text();
+    parseRatingData(dataText);
+  } catch (err) {
+    console.error(err);
+    if (resultEl) {
+      resultEl.innerText = `Error: Unable to load data files. ${err.message}`;
+    }
+  }
+}
 
-    <!-- 2) TOP PICKS BELOW -->
-    <section>
-      <h2 class="row-title">Top Picks</h2>
-      <div id="row-popular" class="row"></div>
-    </section>
+/**
+ * Parse contents of u.item
+ * Format (MovieLens 100k style):
+ *   movieId | title | release_date | video_release_date | IMDb_URL | unknown | Action | Adventure | ... | Western
+ *
+ * Spec: define the 18 genres from "Action" to "Western" (ignore 'unknown'),
+ * and iterate over the last 19 fields to map genre flags.
+ */
+function parseItemData(text) {
+  const genreNames = [
+    'Action', 'Adventure', 'Animation', "Children's", 'Comedy', 'Crime', 'Documentary',
+    'Drama', 'Fantasy', 'Film-Noir', 'Horror', 'Musical', 'Mystery', 'Romance',
+    'Sci-Fi', 'Thriller', 'War', 'Western'
+  ];
 
-    <!-- Search results rail -->
-    <section id="search-sec" class="hidden">
-      <h2 class="row-title">Search Results</h2>
-      <div id="row-search" class="row"></div>
-    </section>
-  </main>
+  movies = []; // reset if re-called
 
-  <!-- Load order matters -->
-  <script src="data.js"></script>
-  <script src="script.js"></script>
-</body>
-</html>
+  const lines = text.split('\n');
+  for (const line of lines) {
+    if (!line.trim()) continue;
+
+    const parts = line.split('|');
+    if (parts.length < 6 + 19) continue;
+
+    const id = parseInt(parts[0], 10);
+    const title = parts[1];
+
+    const flagsStart = parts.length - 19;
+
+    const genres = [];
+    for (let i = 1; i <= 18; i++) {
+      const flag = parts[flagsStart + i];
+      if (flag === '1') {
+        genres.push(genreNames[i - 1]);
+      }
+    }
+
+    movies.push({ id, title, genres });
+  }
+}
+
+/**
+ * Parse contents of u.data
+ * Format (tab-separated):
+ *   userId \t itemId \t rating \t timestamp
+ */
+function parseRatingData(text) {
+  ratings = []; // reset if re-called
+
+  const lines = text.split('\n');
+  for (const line of lines) {
+    if (!line.trim()) continue;
+
+    const parts = line.split('\t');
+    if (parts.length < 4) continue;
+
+    const userId = parseInt(parts[0], 10);
+    const itemId = parseInt(parts[1], 10);
+    const rating = parseInt(parts[2], 10);
+    const timestamp = parseInt(parts[3], 10);
+
+    ratings.push({ userId, itemId, rating, timestamp });
+  }
+}
