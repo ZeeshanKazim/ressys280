@@ -1,4 +1,4 @@
-/* Data Handling Module (adds poster URLs & vectors) */
+/* Data Handling Module (unchanged API; adds poster URLs & vectors) */
 "use strict";
 
 let movies = [];  // { id, title, genres[], genreVector[18], poster }
@@ -63,19 +63,13 @@ function parseItemData(text) {
     const genres = [];
     const genreVector = new Array(18).fill(0);
 
-    for (let i = 1; i < flags.length; i++) {   // skip index 0 (unknown)
+    for (let i = 1; i < flags.length; i++) { // skip index 0 (unknown)
       const bit = flags[i].trim() === "1" ? 1 : 0;
       genreVector[i - 1] = bit;
       if (bit === 1) genres.push(GENRES[i - 1]);
     }
 
-    movies.push({
-      id,
-      title,
-      genres,
-      genreVector,
-      poster: posterUrlFor(id)
-    });
+    movies.push({ id, title, genres, genreVector, poster: posterUrlFor(id) });
   }
 }
 
@@ -83,14 +77,11 @@ function parseItemData(text) {
 function parseRatingData(text) {
   ratings = [];
   const lines = text.split("\n");
-
   for (const rawLine of lines) {
     const line = rawLine.trim();
     if (!line) continue;
-
     const parts = line.split("\t");
     if (parts.length < 4) continue;
-
     ratings.push({
       userId: Number(parts[0]),
       itemId: Number(parts[1]),
