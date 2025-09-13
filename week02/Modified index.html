@@ -3,16 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Content-Based Movie Recommender (Cosine Similarity)</title>
+    <title>Content-Based Movie Recommender</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
         <h1>Content-Based Movie Recommender</h1>
         <p>Select a movie you like, and we'll find similar ones for you!</p>
-        <div class="highlight">
-            <strong>Note:</strong> This version uses Cosine Similarity instead of Jaccard Similarity.
-        </div>
         
         <div class="input-group">
             <select id="movie-select">
@@ -23,6 +20,10 @@
         
         <div id="result-box">
             <p id="result">Loading data, please wait...</p>
+        </div>
+        
+        <div id="data-status" class="hidden">
+            <p>Using fallback data. If you have the MovieLens dataset files (u.item and u.data), place them in the same folder as this HTML file for better results.</p>
         </div>
     </div>
 
