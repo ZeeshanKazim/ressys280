@@ -1,40 +1,35 @@
-/* UI & Recommendation Logic Module (Cosine Similarity + Prime-style UI)
- * --------------------------------------------------------------------
- * - Initializes after data load
- * - Populates dropdown
- * - Computes content-based recommendations using Cosine Similarity on
- *   18-dim binary genre vectors.
- * - Renders recommendations as beautiful poster tiles with % match.
- */
-
+/* UI + Cosine Similarity Recommender (Prime/Hotstar style)
+ * -------------------------------------------------------- */
 "use strict";
 
-/** Init */
+/** ====== Initialization ====== */
 window.onload = async function () {
   const resultEl = document.getElementById("result");
   if (resultEl) resultEl.textContent = "Initializing…";
 
-  await loadData();          // from data.js
+  await loadData();              // from data.js
 
   populateMoviesDropdown();
+  wireSearch();                  // live filter for the dropdown
+
   if (resultEl) resultEl.textContent = "Data loaded. Please select a movie.";
 };
 
-/** Populate dropdown alphabetically */
-function populateMoviesDropdown() {
+/** ====== Dropdown population (alphabetical) ====== */
+function populateMoviesDropdown(list = movies) {
   const select = document.getElementById("movie-select");
   const resultEl = document.getElementById("result");
   if (!select) return;
 
-  // Clear existing options except placeholder
+  // Clear all except placeholder
   select.querySelectorAll("option:not([value=''])").forEach((opt) => opt.remove());
 
-  if (!Array.isArray(movies) || movies.length === 0) {
+  if (!Array.isArray(list) || list.length === 0) {
     if (resultEl) resultEl.textContent = "No movie data available.";
     return;
   }
 
-  const sorted = [...movies].sort((a, b) => a.title.localeCompare(b.title));
+  const sorted = [...list].sort((a, b) => a.title.localeCompare(b.title));
   for (const m of sorted) {
     const opt = document.createElement("option");
     opt.value = String(m.id);
@@ -43,37 +38,58 @@ function populateMoviesDropdown() {
   }
 }
 
-/* =================== Math Utils (Cosine) =================== */
-/** Dot product of two equal-length numeric arrays */
+/** ====== Search that filters the dropdown options ====== */
+function wireSearch() {
+  const input = document.getElementById("search-input");
+  const select = document.getElementById("movie-select");
+  if (!input || !select) return;
+
+  input.addEventListener("input", () => {
+    const q = input.value.trim().toLowerCase();
+    if (q === "") {
+      populateMoviesDropdown(movies);
+      return;
+    }
+    const filtered = movies.filter(m => m.title.toLowerCase().includes(q));
+    populateMoviesDropdown(filtered);
+    // If exactly one match, preselect it for convenience
+    if (filtered.length === 1) select.value = String(filtered[0].id);
+  });
+
+  // Pressing Enter in search triggers recommendations for current selection
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      getRecommendations();
+    }
+  });
+}
+
+/** ====== Math: Cosine Similarity ====== */
 function dot(a, b) {
   let s = 0;
-  for (let i = 0; i < a.length; i++) s += a[i] * b[i];
+  const n = Math.min(a.length, b.length);
+  for (let i = 0; i < n; i++) s += a[i] * b[i];
   return s;
 }
-/** L2 norm (magnitude) */
 function norm(a) {
   let s = 0;
   for (let i = 0; i < a.length; i++) s += a[i] * a[i];
   return Math.sqrt(s);
 }
-/** Cosine similarity ∈ [0,1] for non-negative vectors; falls back to 0 when a norm is 0. */
 function cosineSimilarity(vecA, vecB) {
   const nA = norm(vecA);
   const nB = norm(vecB);
-  if (nA === 0 || nB === 0) return 0;
-  const d = dot(vecA, vecB);
-  const cos = d / (nA * nB);
-  // Guard tiny numerical noise
+  if (nA === 0 || nB === 0) return 0;  // safe guard for empty genre vectors
+  const cos = dot(vecA, vecB) / (nA * nB);
   return Math.max(0, Math.min(1, cos));
 }
 
-/* =================== Rendering =================== */
+/** ====== Render helpers ====== */
 function clearRecommendations() {
   const grid = document.getElementById("recommendations");
   if (grid) grid.innerHTML = "";
 }
 
-/** Create a movie card element with poster, title, and % badge */
 function createMovieCard(movie, percentMatch) {
   const card = document.createElement("article");
   card.className = "movie-card";
@@ -84,6 +100,7 @@ function createMovieCard(movie, percentMatch) {
   img.className = "poster";
   img.src = movie.poster;
   img.alt = movie.title;
+  img.loading = "lazy";
 
   const footer = document.createElement("div");
   footer.className = "movie-footer";
@@ -95,7 +112,7 @@ function createMovieCard(movie, percentMatch) {
   const badge = document.createElement("span");
   badge.className = "badge";
   badge.textContent = `${percentMatch}%`;
-  badge.setAttribute("aria-label", `${percentMatch}% similar`);
+  if (percentMatch === 100) badge.classList.add("full");
 
   footer.appendChild(h);
   card.appendChild(img);
@@ -105,17 +122,7 @@ function createMovieCard(movie, percentMatch) {
   return card;
 }
 
-/* =================== Main: Recommendations =================== */
-/**
- * Steps:
- *  1) Read selected movie ID
- *  2) Find liked movie
- *  3) Prepare candidate list
- *  4) Score candidates with Cosine Similarity over genreVector
- *  5) Sort desc
- *  6) Pick top N
- *  7) Render as cards + percentage
- */
+/** ====== Recommendations (Cosine) ====== */
 function getRecommendations() {
   const select = document.getElementById("movie-select");
   const resultEl = document.getElementById("result");
@@ -130,7 +137,7 @@ function getRecommendations() {
 
   // 1) Input
   const selectedVal = select.value;
-  const selectedId = Number.parseInt(selectedVal, 10);
+  const selectedId = Number(selectedVal);
   if (!selectedVal || Number.isNaN(selectedId)) {
     if (resultEl) resultEl.textContent = "Please select a movie first.";
     clearRecommendations();
@@ -145,8 +152,8 @@ function getRecommendations() {
     return;
   }
 
-  // 3) Candidates (exclude liked)
-  const candidates = movies.filter((m) => m.id !== likedMovie.id);
+  // 3) Candidates (exclude liked) — **bug-proofing**
+  const candidates = movies.filter((m) => Number(m.id) !== Number(likedMovie.id));
 
   // 4) Score (cosine on binary genre vectors)
   const scored = candidates.map((cand) => {
@@ -157,13 +164,19 @@ function getRecommendations() {
   // 5) Sort
   scored.sort((a, b) => b.score - a.score);
 
-  // 6) Top N (Prime-like feel -> show 8)
-  const TOP_N = 8;
-  const top = scored.slice(0, TOP_N);
+  // 6) Top N
+  const TOP_N = 10;
+  let top = scored.slice(0, TOP_N);
+
+  // If everything is 0 (rare), we still show top by title order so UI isn’t empty
+  const maxScore = top.length ? top[0].score : 0;
+  if (maxScore === 0 && scored.length > 0) {
+    top = scored.slice(0, TOP_N); // already sorted; all 0 is fine visually
+  }
 
   // 7) Render
   if (resultEl) {
-    resultEl.textContent = `Because you liked “${likedMovie.title}”, here are your most similar picks (match %):`;
+    resultEl.textContent = `Because you liked “${likedMovie.title}”, your similar picks:`;
   }
   clearRecommendations();
 
@@ -176,8 +189,6 @@ function getRecommendations() {
   }
 
   for (const { movie, score } of top) {
-    // Convert to percentage; emphasize “from how similar to full similar”
-    // 0% = no overlap, 100% = identical genre vector
     const percent = Math.round(score * 100);
     const card = createMovieCard(movie, percent);
     grid.appendChild(card);
