@@ -15,7 +15,7 @@ async function loadData() {
   } catch (err) {
     console.error(err);
     const el = document.getElementById('result');
-    if (el) el.textContent = 'Error: make sure u.item and u.data are next to this page.';
+    if (el) el.textContent = 'Error: put u.item and u.data next to this page.';
     throw err;
   }
 }
