@@ -1,4 +1,4 @@
-/* Data Handling Module (poster URLs & vectors) */
+/* Data Handling Module (adds poster URLs & vectors) */
 "use strict";
 
 let movies = [];  // { id, title, genres[], genreVector[18], poster }
@@ -16,11 +16,13 @@ async function loadData() {
   try {
     if (statusEl) statusEl.textContent = "Loading data files…";
 
+    // u.item
     const itemResp = await fetch("u.item");
     if (!itemResp.ok) throw new Error(`Failed to load u.item (${itemResp.status})`);
     const itemText = await itemResp.text();
     parseItemData(itemText);
 
+    // u.data
     const dataResp = await fetch("u.data");
     if (!dataResp.ok) throw new Error(`Failed to load u.data (${dataResp.status})`);
     const dataText = await dataResp.text();
@@ -82,4 +84,18 @@ function parseRatingData(text) {
   ratings = [];
   const lines = text.split("\n");
 
-  for (const rawLine of
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    const parts = line.split("\t");
+    if (parts.length < 4) continue;
+
+    ratings.push({
+      userId: Number(parts[0]),
+      itemId: Number(parts[1]),
+      rating: Number(parts[2]),
+      timestamp: Number(parts[3]),
+    });
+  }
+}
