@@ -7,39 +7,37 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <header class="nav">
-    <div class="brand">
-      <span class="brand-accent">●</span>
-      <span class="brand-text">CineMatch</span>
-    </div>
-  </header>
+  <div class="site-wrap">
+    <header class="hero">
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <h1 class="brand-title">Content-Based Movie Recommender</h1>
+      </div>
+      <p class="tagline">Select a movie you like, and we'll find similar ones for you!</p>
+      <p class="homework">Homework: <strong>Change similarity to Cosine Similarity</strong></p>
+    </header>
 
-  <main class="container">
-    <h1>Content-Based Movie Recommender</h1>
-    <p class="instructions">
-      Select a movie you like, and we'll find similar ones for you!
-    </p>
+    <main class="container">
+      <section class="controls">
+        <label for="movie-select" class="sr-only">Choose a movie</label>
+        <select id="movie-select" aria-label="Movie selection">
+          <option value="" disabled selected>Loading movies…</option>
+        </select>
+        <!-- Per spec: this button must call getRecommendations() -->
+        <button id="recommend-btn" onclick="getRecommendations()">Get Recommendations</button>
+      </section>
 
-    <div class="controls">
-      <label for="movie-select" class="sr-only">Choose a movie</label>
-      <select id="movie-select" aria-label="Movie selection">
-        <option value="" disabled selected>Loading movies…</option>
-      </select>
+      <section id="result-box" class="results" role="status" aria-live="polite">
+        <p id="result" class="status">Loading data…</p>
+        <!-- Cards will be injected here -->
+        <div id="cards" class="cards"></div>
+      </section>
+    </main>
 
-      <!-- Per spec: this button must call getRecommendations() -->
-      <button id="recommend-btn" onclick="getRecommendations()">Get Recommendations</button>
-    </div>
-
-    <div id="result-box" role="status" aria-live="polite">
-      <p id="result">Loading data…</p>
-    </div>
-
-    <!-- New: visual recommendation strip like Netflix -->
-    <section class="rec-section">
-      <h2 class="rec-title">Top Picks For You</h2>
-      <div id="recommendations" class="rec-grid" aria-live="polite"></div>
-    </section>
-  </main>
+    <footer class="footnote">
+      <small>Built with vanilla HTML, CSS, and JavaScript. Movie images are illustrative; real posters may vary.</small>
+    </footer>
+  </div>
 
   <!-- Load order matters: data.js first, then script.js -->
   <script src="data.js"></script>
