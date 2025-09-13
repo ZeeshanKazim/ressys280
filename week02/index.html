@@ -32,8 +32,7 @@
         </select>
       </div>
 
-      <!-- Inline + JS listener for maximum reliability -->
-      <button id="recommend-btn" type="button" class="btn" onclick="getRecommendations()">
+      <button id="recommend-btn" type="button" class="btn">
         Get Recommendations
       </button>
     </section>
@@ -44,6 +43,7 @@
     </section>
   </main>
 
+  <!-- Load data layer first, then UI/logic -->
   <script src="data.js"></script>
   <script src="script.js"></script>
 </body>
