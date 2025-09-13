@@ -93,4 +93,84 @@ h1{ margin: 0 0 6px; font-size: 28px; }
   padding: 11px 18px;
   border: none;
   border-radius: 10px;
-  background: var(-
+  background: var(--accent);
+  color: white;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background .12s ease, transform .05s ease, box-shadow .12s ease;
+  box-shadow: 0 8px 18px rgba(30,163,255,.25);
+}
+.btn:hover{ background: var(--accent-strong); }
+.btn:active{ transform: translateY(1px); }
+
+/* ======= Results ======= */
+.results{
+  margin-top: 12px;
+  padding: 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  min-height: 64px;
+}
+#result{ margin: 0 0 10px; font-weight: 800; }
+
+/* ======= Cards Grid ======= */
+.cards-grid{
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 14px;
+}
+
+/* ======= Movie Card ======= */
+.movie-card{
+  background: var(--card);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  position: relative;
+  transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+}
+.movie-card:hover{
+  transform: translateY(-2px);
+  border-color: rgba(30,163,255,.55);
+  box-shadow: 0 12px 36px rgba(0,0,0,.55);
+}
+.poster{
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  display: block;
+  object-fit: cover;
+  background: #0b0f1a;
+}
+.movie-footer{
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 10px 10px 12px;
+  background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.85) 60%, rgba(0,0,0,.95) 100%);
+  color: white;
+}
+.movie-title{
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.badge{
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(30,163,255,.98);
+  color: white;
+  font-weight: 900;
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: 999px;
+  box-shadow: 0 4px 14px rgba(30,163,255,.45);
+}
+.badge.full{
+  background: linear-gradient(90deg, #22c55e, #16a34a);
+  box-shadow: 0 4px 14px rgba(34,197,94,.45);
+}
+
+/* Empty state */
+.empty{ color: var(--muted); font-weight: 600; }
