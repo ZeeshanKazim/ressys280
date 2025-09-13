@@ -117,8 +117,8 @@ h1{ margin: 0 0 6px; font-size: 28px; }
 /* ======= Cards Grid ======= */
 .cards-grid{
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
 }
 
 /* ======= Movie Card ======= */
@@ -172,5 +172,79 @@ h1{ margin: 0 0 6px; font-size: 28px; }
   box-shadow: 0 4px 14px rgba(34,197,94,.45);
 }
 
-/* Empty state */
+/* ======= Breakdown (per-genre details) ======= */
+.movie-tile { /* optional wrapper for card + breakdown */ }
+
+.breakdown{
+  margin-top: 6px;
+  background: #0c1220;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.breakdown > summary{
+  cursor: pointer;
+  list-style: none;
+  padding: 10px 12px;
+  font-weight: 800;
+  color: var(--text);
+  background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));
+  border-bottom: 1px solid var(--border);
+}
+.breakdown[open] > summary{ border-bottom-color: transparent; }
+
+.breakdown-content{
+  padding: 10px 12px 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.group-title{
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+}
+
+.chips{ display: flex; flex-wrap: wrap; gap: 6px; }
+.chip{
+  background: #101a2c;
+  color: #cbd5e1;
+  border: 1px solid var(--border);
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+/* Contribution rows */
+.contrib{
+  display: grid;
+  gap: 6px;
+}
+.contrib-row{
+  display: grid;
+  grid-template-columns: 110px 1fr 46px;
+  align-items: center;
+  gap: 8px;
+}
+.contrib-label{ font-size: 12px; color: var(--text); }
+.contrib-bar{
+  position: relative;
+  height: 8px;
+  border: 1px solid var(--border);
+  background: #0a1424;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.contrib-fill{
+  height: 100%;
+  background: var(--accent);
+  width: 0%;
+}
+.contrib-pct{
+  font-size: 12px;
+  font-weight: 800;
+  text-align: right;
+}
 .empty{ color: var(--muted); font-weight: 600; }
