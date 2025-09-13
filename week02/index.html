@@ -1,45 +1,56 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Content-Based Movie Recommender</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="site-wrap">
-    <header class="hero">
-      <div class="brand">
-        <span class="brand-dot"></span>
-        <h1 class="brand-title">Content-Based Movie Recommender</h1>
-      </div>
-      <p class="tagline">Select a movie you like, and we'll find similar ones for you!</p>
-      <p class="homework">Homework: <strong>Change similarity to Cosine Similarity</strong></p>
-    </header>
+  <header class="nav">
+    <div class="brand">Prime • Hotstar Style</div>
+    <input id="search" class="search" placeholder="Search movies..." />
+  </header>
 
-    <main class="container">
-      <section class="controls">
-        <label for="movie-select" class="sr-only">Choose a movie</label>
-        <select id="movie-select" aria-label="Movie selection">
-          <option value="" disabled selected>Loading movies…</option>
+  <main class="wrap">
+    <section class="hero">
+      <h1>Find your next favorite</h1>
+      <p class="muted">Homework: using <b>Cosine Similarity</b> over genres.</p>
+
+      <div class="controls">
+        <select id="movie-select" aria-label="Select a movie">
+          <option value="">— Select a Movie —</option>
         </select>
-        <!-- Per spec: this button must call getRecommendations() -->
         <button id="recommend-btn" onclick="getRecommendations()">Get Recommendations</button>
-      </section>
+      </div>
 
-      <section id="result-box" class="results" role="status" aria-live="polite">
-        <p id="result" class="status">Loading data…</p>
-        <!-- Cards will be injected here -->
-        <div id="cards" class="cards"></div>
-      </section>
-    </main>
+      <div id="result-box">
+        <p id="result" class="muted">Loading data…</p>
+        <!-- textual list of recommended titles with exact % -->
+        <p id="rec-list" class="hidden"></p>
+      </div>
+    </section>
 
-    <footer class="footnote">
-      <small>Built with vanilla HTML, CSS, and JavaScript. Movie images are illustrative; real posters may vary.</small>
-    </footer>
-  </div>
+    <!-- 1) RECOMMENDATIONS ABOVE TOP PICKS -->
+    <section>
+      <h2 class="row-title" id="recs-title">Because you liked…</h2>
+      <div id="row-recs" class="row"></div>
+    </section>
 
-  <!-- Load order matters: data.js first, then script.js -->
+    <!-- 2) TOP PICKS BELOW -->
+    <section>
+      <h2 class="row-title">Top Picks</h2>
+      <div id="row-popular" class="row"></div>
+    </section>
+
+    <!-- Search results rail -->
+    <section id="search-sec" class="hidden">
+      <h2 class="row-title">Search Results</h2>
+      <div id="row-search" class="row"></div>
+    </section>
+  </main>
+
+  <!-- Load order matters -->
   <script src="data.js"></script>
   <script src="script.js"></script>
 </body>
