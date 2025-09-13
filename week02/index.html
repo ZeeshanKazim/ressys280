@@ -1,56 +1,30 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Content-Based Movie Recommender</title>
-  <link rel="stylesheet" href="style.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Content-Based Movie Recommender</title>
+    <link rel="stylesheet" href="style.css">
 </head>
-<body data-theme="prime">
-  <header class="nav">
-    <div class="brand">C I N E M A</div>
-
-    <div class="theme">
-      <button id="btn-prime" class="chip">Prime</button>
-      <button id="btn-netflix" class="chip">Netflix</button>
+<body>
+    <div class="container">
+        <h1>Content-Based Movie Recommender</h1>
+        <p>Select a movie you like, and we'll find similar ones for you!</p>
+        
+        <div class="input-group">
+            <select id="movie-select">
+                <option value="">-- Select a Movie --</option>
+            </select>
+            <button id="recommend-btn">Get Recommendations</button>
+        </div>
+        
+        <div id="result-box">
+            <p id="result">Loading data, please wait...</p>
+        </div>
     </div>
 
-    <input id="search" class="search" placeholder="Search movies…" />
-  </header>
-
-  <main class="wrap">
-    <section class="hero">
-      <h1>Find your next favorite</h1>
-      <p class="muted">Cosine similarity over genres. Select a movie or search.</p>
-
-      <div class="controls">
-        <select id="movie-select" aria-label="Select a movie">
-          <option value="">— Select a Movie —</option>
-        </select>
-        <button id="recommend-btn" onclick="getRecommendations()">Get Recommendations</button>
-      </div>
-
-      <div id="result-box"><p id="result" class="muted">Loading data…</p></div>
-    </section>
-
-    <section id="search-section" class="hidden">
-      <h2 class="row-title">Search Results</h2>
-      <div id="row-search" class="row"></div>
-    </section>
-
-    <section>
-      <h2 class="row-title">Top Picks</h2>
-      <div id="row-popular" class="row"></div>
-    </section>
-
-    <section>
-      <h2 class="row-title">Because you liked…</h2>
-      <div id="row-recs" class="row"></div>
-    </section>
-  </main>
-
-  <!-- Order matters: data.js first -->
-  <script src="data.js"></script>
-  <script src="script.js"></script>
+    <!-- Load JavaScript files -->
+    <script src="data.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>
