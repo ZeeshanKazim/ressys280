@@ -1,15 +1,11 @@
 /* UI + Cosine Similarity Recommender (Prime/Hotstar style) */
 "use strict";
 
-/** Small shared list for reconstructing vectors if any are missing */
-const GENRES_18 = [
-  "Action", "Adventure", "Animation", "Children's", "Comedy", "Crime",
-  "Documentary", "Drama", "Fantasy", "Film-Noir", "Horror", "Musical",
-  "Mystery", "Romance", "Sci-Fi", "Thriller", "War", "Western"
-];
-
+/** ====== Initialization ====== */
 window.addEventListener("DOMContentLoaded", async () => {
   const resultEl = document.getElementById("result");
+  const btn = document.getElementById("recommend-btn");
+
   if (resultEl) resultEl.textContent = "Initializing…";
 
   await loadData();              // from data.js
@@ -17,34 +13,21 @@ window.addEventListener("DOMContentLoaded", async () => {
   populateMoviesDropdown();
   wireSearch();
 
-  // Also wire the click in JS (in addition to inline) for belt & suspenders.
-  const btn = document.getElementById("recommend-btn");
+  // Wire the click in JS (more reliable than inline onclick)
   if (btn) btn.addEventListener("click", getRecommendations);
 
   if (resultEl) resultEl.textContent = "Data loaded. Please select a movie.";
 });
 
-/** Guarantee a valid 18-dim vector even if missing on the object */
-function ensureVector(movie) {
-  if (Array.isArray(movie.genreVector) && movie.genreVector.length === 18) {
-    return movie.genreVector;
-  }
-  const vec = new Array(18).fill(0);
-  (movie.genres || []).forEach(g => {
-    const idx = GENRES_18.indexOf(g);
-    if (idx >= 0) vec[idx] = 1;
-  });
-  movie.genreVector = vec; // cache back
-  return vec;
-}
-
-/** Populate dropdown (alphabetical); keep selection if still present */
+/** ====== Dropdown population (alphabetical) ====== */
 function populateMoviesDropdown(list = movies) {
   const select = document.getElementById("movie-select");
   const resultEl = document.getElementById("result");
   if (!select) return;
 
   const prev = select.value || "";
+
+  // Clear all except placeholder
   select.querySelectorAll("option:not([value=''])").forEach((opt) => opt.remove());
 
   if (!Array.isArray(list) || list.length === 0) {
@@ -59,10 +42,14 @@ function populateMoviesDropdown(list = movies) {
     opt.textContent = m.title;
     select.appendChild(opt);
   }
-  if ([...select.options].some(o => o.value === prev)) select.value = prev;
+
+  // Preserve selection if still present after filtering
+  if ([...select.options].some(o => o.value === prev)) {
+    select.value = prev;
+  }
 }
 
-/** Search input filters dropdown; Enter triggers recommend */
+/** ====== Search that filters the dropdown options ====== */
 function wireSearch() {
   const input = document.getElementById("search-input");
   const select = document.getElementById("movie-select");
@@ -75,28 +62,44 @@ function wireSearch() {
     populateMoviesDropdown(filtered);
     if (filtered.length === 1) select.value = String(filtered[0].id);
   });
+
+  // Enter triggers recommendations
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && btn) btn.click();
   });
 }
 
-/** Cosine Similarity helpers */
+/** ====== Math: Cosine Similarity ====== */
 function dot(a, b) { let s = 0; const n = Math.min(a.length, b.length); for (let i=0;i<n;i++) s += a[i]*b[i]; return s; }
 function norm(a) { let s = 0; for (let i=0;i<a.length;i++) s += a[i]*a[i]; return Math.sqrt(s); }
 function cosineSimilarity(vecA, vecB) {
-  const vA = ensureVector({ genreVector: vecA, genres: [] }); // guard
-  const vB = ensureVector({ genreVector: vecB, genres: [] });
-  const nA = norm(vA), nB = norm(vB);
+  const nA = norm(vecA), nB = norm(vecB);
   if (nA === 0 || nB === 0) return 0;
-  const cos = dot(vA, vB) / (nA * nB);
+  const cos = dot(vecA, vecB) / (nA * nB);
   return Math.max(0, Math.min(1, cos));
 }
 
-/** Rendering helpers */
+/** ====== Helpers ====== */
 function clearRecommendations() {
   const grid = document.getElementById("recommendations");
   if (grid) grid.innerHTML = "";
 }
+
+/** If nothing selected (e.g., placeholder), auto-select the first real option. */
+function ensureSelection() {
+  const select = document.getElementById("movie-select");
+  if (!select) return null;
+  const chosen = select.value;
+  if (chosen) return chosen;
+  // Pick first non-empty option if available
+  const firstReal = [...select.options].find(o => o.value !== "");
+  if (firstReal) {
+    select.value = firstReal.value;
+    return firstReal.value;
+  }
+  return null;
+}
+
 function createMovieCard(movie, percentMatch) {
   const card = document.createElement("article");
   card.className = "movie-card";
@@ -111,6 +114,7 @@ function createMovieCard(movie, percentMatch) {
 
   const footer = document.createElement("div");
   footer.className = "movie-footer";
+
   const h = document.createElement("h3");
   h.className = "movie-title";
   h.textContent = movie.title;
@@ -124,20 +128,20 @@ function createMovieCard(movie, percentMatch) {
   card.appendChild(img);
   card.appendChild(footer);
   card.appendChild(badge);
+
   return card;
 }
 
-/** Main: Recommendations (Cosine) */
+/** ====== Recommendations (Cosine) ====== */
 function getRecommendations() {
-  try {
-    const select = document.getElementById("movie-select");
-    const resultEl = document.getElementById("result");
-    const grid = document.getElementById("recommendations");
-    if (!select || !grid) return;
+  const select = document.getElementById("movie-select");
+  const resultEl = document.getElementById("result");
+  const grid = document.getElementById("recommendations");
+  if (!select || !grid) return;
 
-    // Safe selection read
-    const opt = select.selectedOptions && select.selectedOptions[0] ? select.selectedOptions[0] : null;
-    const selectedVal = opt ? opt.value : select.value;
+  try {
+    // Ensure we have a valid selection
+    const selectedVal = ensureSelection();
     const selectedId = Number.parseInt(selectedVal, 10);
 
     if (!selectedVal || Number.isNaN(selectedId)) {
@@ -153,18 +157,24 @@ function getRecommendations() {
       return;
     }
 
-    const likedVec = ensureVector(likedMovie);
+    // Candidates (exclude liked)
     const candidates = movies.filter(m => Number(m.id) !== selectedId);
 
-    const scored = candidates.map(cand => {
-      const score = cosineSimilarity(likedVec, ensureVector(cand));
-      return { movie: cand, score };
-    });
+    // Score
+    const scored = candidates.map(cand => ({
+      movie: cand,
+      score: cosineSimilarity(likedMovie.genreVector, cand.genreVector)
+    }));
 
+    // Sort and take top N
     scored.sort((a, b) => b.score - a.score);
-    const top = scored.slice(0, 10);
+    const TOP_N = 10;
+    const top = scored.slice(0, TOP_N);
 
-    if (resultEl) resultEl.textContent = `Because you liked “${likedMovie.title}”, your similar picks:`;
+    // Render
+    if (resultEl) {
+      resultEl.textContent = `Because you liked “${likedMovie.title}”, your similar picks:`;
+    }
     clearRecommendations();
 
     if (!top.length) {
@@ -181,10 +191,7 @@ function getRecommendations() {
     }
   } catch (err) {
     console.error(err);
-    const resultEl = document.getElementById("result");
     if (resultEl) resultEl.textContent = `Error: ${err.message}`;
+    clearRecommendations();
   }
 }
-
-/* Expose globally so inline onclick works everywhere */
-window.getRecommendations = getRecommendations;
