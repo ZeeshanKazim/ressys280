@@ -41,6 +41,7 @@ function getTopPicks(n=18){
 
 /* ---------------- UI helpers ---------------- */
 function $(id){ return document.getElementById(id); }
+
 function populateMoviesDropdown(){
   const sel = $('movie-select');
   while (sel.options.length > 1) sel.remove(1);
@@ -52,6 +53,7 @@ function populateMoviesDropdown(){
     sel.appendChild(opt);
   }
 }
+
 function titleInitials(t){
   return t.split(/[\s:–-]+/).filter(Boolean).slice(0,2).map(x=>x[0]).join('').toUpperCase();
 }
@@ -59,12 +61,22 @@ function gradFromId(id){
   const h = (id*37) % 360, h2 = (h+40)%360;
   return `linear-gradient(160deg, hsla(${h},70%,45%,.9), hsla(${h2},70%,35%,.9))`;
 }
+
+/* makeCard can show an optional similarity badge if item.score exists */
 function makeCard(m){
   const card = document.createElement('div'); card.className='card'; card.title = m.title;
 
   const poster = document.createElement('div'); poster.className='poster';
   poster.style.setProperty('--grad', gradFromId(m.id));
   poster.textContent = titleInitials(m.title);
+
+  /* similarity badge */
+  if (typeof m.score === 'number'){
+    const badge = document.createElement('div');
+    badge.className = 'badge';
+    badge.textContent = `${Math.round(m.score*100)}% match`;
+    poster.appendChild(badge);
+  }
 
   const meta = document.createElement('div'); meta.className='meta';
   const h = document.createElement('p'); h.className='title'; h.textContent = m.title;
@@ -109,8 +121,10 @@ function setupSearch(){
 
 /* ---------------- Theme toggle ---------------- */
 function setupTheme(){
-  $('btn-prime').addEventListener('click', ()=> document.body.setAttribute('data-theme','prime'));
-  $('btn-netflix').addEventListener('click', ()=> document.body.setAttribute('data-theme','netflix'));
+  const p = document.getElementById('btn-prime');
+  const n = document.getElementById('btn-netflix');
+  if (p) p.addEventListener('click', ()=> document.body.setAttribute('data-theme','prime'));
+  if (n) n.addEventListener('click', ()=> document.body.setAttribute('data-theme','netflix'));
 }
 
 /* ---------------- Main recommendation (COSINE) ---------------- */
@@ -137,7 +151,7 @@ function getRecommendations(){
 
   $('row-recs').parentElement.querySelector('.row-title').textContent =
     `Because you liked: ${liked.title}`;
-  res.textContent = `Using Cosine Similarity • ${top.length} similar titles`;
+  res.textContent = `Using Cosine Similarity • showing ${top.length} similar titles`;
 }
 
 /* ---------------- Init ---------------- */
@@ -152,6 +166,15 @@ window.onload = async () => {
     populateMoviesDropdown();
     renderRow('row-popular', getTopPicks());
 
-    const r = $('result'); r.textContent = 'Data loaded. Select a movie or search.';
-  }catch(e){ /* data.js already shows an error */ }
+    const r = $('result');
+    r.textContent = `Data loaded: ${movies.length} movies, ${ratings.length} ratings. Select a movie.`;
+    r.classList.remove('muted');
+
+    // helpful if something silently fails later
+    if (movies.length === 0) {
+      r.textContent = 'No movies parsed. Check u.item format/location.';
+    }
+  }catch(e){
+    // data.js already prints a friendly message
+  }
 };
