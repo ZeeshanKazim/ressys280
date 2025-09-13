@@ -1,4 +1,4 @@
-/* UI + Cosine Similarity Recommender with Animated Background + Inspector */
+/* UI + Cosine Similarity Recommender with Right-Side Inspector */
 "use strict";
 
 let currentLiked = null;
@@ -15,22 +15,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   wireSearch();
 
   if (btn) btn.addEventListener("click", getRecommendations);
-
-  // Animated Netflix-like background
-  startBackgroundHueCycle();
-
   if (resultEl) resultEl.textContent = "Data loaded. Please select a movie.";
 });
-
-/** Rotate backdrop hue every few seconds for a Netflix-like vibe */
-function startBackgroundHueCycle() {
-  const hues = [0, 20, 45, 90, 150, 210, 260, 320];
-  let i = 0;
-  const apply = () =>
-    document.documentElement.style.setProperty("--heroHue", `${hues[i]}deg`);
-  apply();
-  setInterval(() => { i = (i + 1) % hues.length; apply(); }, 4000);
-}
 
 /** ====== Dropdown population (alphabetical) ====== */
 function populateMoviesDropdown(list = movies) {
@@ -129,6 +115,9 @@ function renderInspector(liked, movie, percentMatch) {
   const panel = document.getElementById("inspector");
   panel.innerHTML = ""; // reset
 
+  const header = document.createElement("div");
+  header.className = "inspector__header";
+
   const title = document.createElement("h3");
   title.className = "inspector__title";
   title.textContent = movie.title;
@@ -137,8 +126,9 @@ function renderInspector(liked, movie, percentMatch) {
   sub.className = "inspector__subtitle";
   sub.textContent = `Match: ${percentMatch}% — because you liked “${liked.title}”`;
 
-  panel.appendChild(title);
-  panel.appendChild(sub);
+  header.appendChild(title);
+  header.appendChild(sub);
+  panel.appendChild(header);
 
   const breakdown = computeBreakdown(liked, movie);
 
@@ -232,8 +222,10 @@ function buildCard(movie, percentMatch, liked) {
   card.appendChild(badge);
 
   const activate = () => {
+    // highlight
     document.querySelectorAll(".movie-card.selected").forEach(el => el.classList.remove("selected"));
     card.classList.add("selected");
+    // render inspector
     renderInspector(liked, movie, percentMatch);
   };
 
