@@ -1,22 +1,35 @@
+// Track if data is loaded
+let isDataLoaded = false;
+
 /**
  * Initialize application when window loads
  */
 window.onload = async function() {
+    const resultElement = document.getElementById('result');
+    const recommendBtn = document.getElementById('recommend-btn');
+    
+    // Disable button until data is loaded
+    recommendBtn.disabled = true;
+    resultElement.textContent = 'Loading data, please wait...';
+    
     try {
         // Wait for data to load
         await loadData();
         
+        // Enable button and update status
+        recommendBtn.disabled = false;
+        resultElement.textContent = 'Data loaded. Please select a movie.';
+        isDataLoaded = true;
+        
         // Populate the movie dropdown
         populateMoviesDropdown();
-        
-        // Update status message
-        document.getElementById('result').textContent = 
-            'Data loaded. Please select a movie.';
             
         // Add event listener to the recommendation button
-        document.getElementById('recommend-btn').addEventListener('click', getRecommendations);
+        recommendBtn.addEventListener('click', getRecommendations);
     } catch (error) {
         console.error('Error initializing application:', error);
+        resultElement.textContent = 'Error loading data. Please check the console for details.';
+        resultElement.classList.add('error');
     }
 };
 
@@ -62,6 +75,11 @@ function calculateJaccardSimilarity(setA, setB) {
  * Get recommendations based on the selected movie
  */
 function getRecommendations() {
+    if (!isDataLoaded) {
+        document.getElementById('result').textContent = 'Data not loaded yet. Please wait.';
+        return;
+    }
+    
     // Step 1: Get user input
     const movieSelect = document.getElementById('movie-select');
     const selectedMovieId = parseInt(movieSelect.value);
@@ -98,12 +116,19 @@ function getRecommendations() {
     scoredMovies.sort((a, b) => b.score - a.score);
     
     // Step 6: Select top recommendations
-    const topRecommendations = scoredMovies.slice(0, 2);
+    const topRecommendations = scoredMovies.slice(0, 5);
     
     // Step 7: Display results
     if (topRecommendations.length > 0) {
-        const recommendationTitles = topRecommendations.map(movie => movie.title);
-        resultElement.innerHTML = `Because you liked '<strong>${likedMovie.title}</strong>', we recommend: <strong>${recommendationTitles.join('</strong>, <strong>')}</strong>`;
+        let html = `<p>Because you liked "<strong>${likedMovie.title}</strong>", we recommend:</p>`;
+        html += '<ul class="recommendation-list">';
+        
+        topRecommendations.forEach(movie => {
+            html += `<li>${movie.title} <em>(similarity: ${movie.score.toFixed(2)})</em></li>`;
+        });
+        
+        html += '</ul>';
+        resultElement.innerHTML = html;
     } else {
         resultElement.textContent = 'No recommendations found.';
     }
