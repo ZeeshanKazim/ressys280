@@ -39,20 +39,20 @@
 
     <section id="result-box" role="status" aria-live="polite" class="results">
       <p id="result">Loading…</p>
-
-      <!-- Two-column layout: recommendations + inspector -->
-      <div class="results-flex">
-        <div id="recommendations" class="cards-grid" aria-label="Recommended movies"></div>
-
-        <aside id="inspector" class="inspector" aria-label="Similarity details panel">
-          <div class="inspector__empty">
-            <h3>Similarity details</h3>
-            <p class="muted">Click a recommendation to see <strong>why</strong> it matches — shared genres, differences, and per-genre contributions.</p>
-          </div>
-        </aside>
-      </div>
+      <div id="recommendations" class="cards-grid" aria-label="Recommended movies"></div>
     </section>
   </main>
+
+  <!-- Modal for similarity details -->
+  <div id="modal" class="modal hidden" aria-hidden="true">
+    <div class="modal__backdrop" data-close="1"></div>
+    <div class="modal__dialog" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <button class="modal__close" id="modal-close" aria-label="Close">×</button>
+      <div id="modal-content" class="modal__content">
+        <!-- Filled via script.js -->
+      </div>
+    </div>
+  </div>
 
   <!-- Load data layer first, then UI/logic -->
   <script src="data.js"></script>
