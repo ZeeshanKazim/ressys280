@@ -2,72 +2,32 @@
 let movies = [];
 let ratings = [];
 
-// Sample movie data as fallback
-const sampleMovies = [
-    { id: 1, title: "Toy Story (1995)", genres: ["Animation", "Children's", "Comedy"] },
-    { id: 2, title: "Jumanji (1995)", genres: ["Adventure", "Children's", "Fantasy"] },
-    { id: 3, title: "Grumpier Old Men (1995)", genres: ["Comedy", "Romance"] },
-    { id: 4, title: "Waiting to Exhale (1995)", genres: ["Comedy", "Drama", "Romance"] },
-    { id: 5, title: "Father of the Bride Part II (1995)", genres: ["Comedy"] },
-    { id: 6, title: "Heat (1995)", genres: ["Action", "Crime", "Thriller"] },
-    { id: 7, title: "Sabrina (1995)", genres: ["Comedy", "Romance"] },
-    { id: 8, title: "Tom and Huck (1995)", genres: ["Adventure", "Children's"] },
-    { id: 9, title: "Sudden Death (1995)", genres: ["Action"] },
-    { id: 10, title: "GoldenEye (1995)", genres: ["Action", "Adventure", "Thriller"] },
-    { id: 11, title: "American President, The (1995)", genres: ["Comedy", "Drama", "Romance"] },
-    { id: 12, title: "Dracula: Dead and Loving It (1995)", genres: ["Comedy", "Horror"] },
-    { id: 13, title: "Balto (1995)", genres: ["Animation", "Children's"] },
-    { id: 14, title: "Nixon (1995)", genres: ["Drama"] },
-    { id: 15, title: "Cutthroat Island (1995)", genres: ["Action", "Adventure", "Romance"] }
-];
-
-// Sample rating data as fallback
-const sampleRatings = [
-    { userId: 1, itemId: 1, rating: 5, timestamp: 887431883 },
-    { userId: 1, itemId: 2, rating: 3, timestamp: 875693118 },
-    { userId: 1, itemId: 3, rating: 4, timestamp: 888717495 },
-    { userId: 2, itemId: 1, rating: 4, timestamp: 878542960 },
-    { userId: 2, itemId: 4, rating: 5, timestamp: 886397596 },
-    { userId: 2, itemId: 5, rating: 3, timestamp: 884182806 },
-    { userId: 3, itemId: 6, rating: 5, timestamp: 881251949 },
-    { userId: 3, itemId: 7, rating: 4, timestamp: 876862836 },
-    { userId: 3, itemId: 8, rating: 3, timestamp: 878542960 }
-];
-
 /**
- * Load and parse data from local files with fallback to sample data
+ * Load and parse data from local files
  * @returns {Promise} Promise that resolves when data is loaded
  */
 async function loadData() {
     try {
-        // Try to load movie data from u.item
+        // Load and parse movie data
         const moviesResponse = await fetch('u.item');
-        if (moviesResponse.ok) {
-            const moviesText = await moviesResponse.text();
-            parseItemData(moviesText);
-            console.log('Loaded movie data from u.item');
-        } else {
-            throw new Error('u.item not found');
+        if (!moviesResponse.ok) {
+            throw new Error('Failed to load movie data');
         }
+        const moviesText = await moviesResponse.text();
+        parseItemData(moviesText);
         
-        // Try to load rating data from u.data
+        // Load and parse rating data
         const ratingsResponse = await fetch('u.data');
-        if (ratingsResponse.ok) {
-            const ratingsText = await ratingsResponse.text();
-            parseRatingData(ratingsText);
-            console.log('Loaded rating data from u.data');
-        } else {
-            throw new Error('u.data not found');
+        if (!ratingsResponse.ok) {
+            throw new Error('Failed to load rating data');
         }
-        
+        const ratingsText = await ratingsResponse.text();
+        parseRatingData(ratingsText);
     } catch (error) {
-        console.log('Using fallback data:', error.message);
-        // Use sample data as fallback
-        movies = sampleMovies;
-        ratings = sampleRatings;
-        
-        // Show message about fallback data
-        document.getElementById('data-status').classList.remove('hidden');
+        console.error('Error loading data:', error);
+        document.getElementById('result').textContent = 
+            'Error loading data. Please check if u.item and u.data files are available.';
+        throw error;
     }
 }
 
