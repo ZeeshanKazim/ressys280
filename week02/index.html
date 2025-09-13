@@ -7,24 +7,35 @@
   <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
+  <header class="hero">
+    <div class="hero__inner">
+      <div class="brand">
+        <span class="brand__logo">🎬</span>
+        <span class="brand__name">Prime-Style Recs</span>
+      </div>
+      <h1>Content-Based Movie Recommender</h1>
+      <p class="subtitle">Select a movie you love—we’ll find the most similar ones using <strong>Cosine Similarity</strong>.</p>
+    </div>
+  </header>
+
   <main class="container">
-    <h1>Content-Based Movie Recommender</h1>
-    <p class="subtitle">Select a movie you like, and we'll find similar ones for you!</p>
+    <section class="controls">
+      <div class="control-group">
+        <label for="movie-select" class="label">Pick a movie</label>
+        <select id="movie-select" aria-label="Movie selection">
+          <option value="">— Select a movie —</option>
+        </select>
+      </div>
 
-    <div class="controls">
-      <label for="movie-select" class="label">Pick a movie</label>
-      <select id="movie-select" aria-label="Movie selection">
-        <option value="">— Select a movie —</option>
-      </select>
-
-      <button id="recommend-btn" type="button" onclick="getRecommendations()">
+      <button id="recommend-btn" type="button" class="btn" onclick="getRecommendations()">
         Get Recommendations
       </button>
-    </div>
+    </section>
 
-    <div id="result-box" role="status" aria-live="polite">
+    <section id="result-box" role="status" aria-live="polite" class="results">
       <p id="result">Loading…</p>
-    </div>
+      <div id="recommendations" class="cards-grid" aria-label="Recommended movies"></div>
+    </section>
   </main>
 
   <!-- Load data layer first, then UI/logic (required order) -->
