@@ -1,94 +1,29 @@
-/* ======= Theme (Prime/Hotstar vibe + Animated Aurora) ======= */
+/* ======= Theme (Prime/Hotstar vibe) ======= */
 * { box-sizing: border-box; }
 html, body { height: 100%; }
 
 :root{
-  /* Core palette */
-  --bg0: #060910;    /* deepest */
-  --bg1: #0a1220;    /* navy base */
-  --panel: #0f1626;  /* panel surface */
-  --card: #141a2a;   /* card surface */
-  --text: #e5e7eb;   /* light text */
-  --muted: #9aa4b2;  /* secondary text */
-  --accent: #1ea3ff; /* prime blue */
+  --bg0: #070a13;
+  --bg1: #0b1120;
+  --panel: #0e1423;
+  --card: #141a2a;
+  --text: #e5e7eb;
+  --muted: #9aa4b2;
+  --accent: #1ea3ff;
   --accent-strong: #1286db;
   --border: #1f2a3a;
   --shadow: rgba(0,0,0,.45);
 }
 
-html { background: var(--bg0); }
-
 body{
   margin: 0;
-  /* Cinematic multi-layer base (fixed for parallax feel) */
   background:
-    radial-gradient(1200px 650px at 12% -10%, rgba(23,37,84,.65) 0%, rgba(23,37,84,0) 60%),
-    radial-gradient(900px 520px at 88% 0%, rgba(30,27,75,.55) 0%, rgba(30,27,75,0) 60%),
-    radial-gradient(1300px 900px at 50% 120%, rgba(2,6,23,.9) 0%, rgba(2,6,23,0) 70%),
-    linear-gradient(180deg, var(--bg1) 0%, var(--bg0) 60%);
-  background-attachment: fixed, fixed, fixed, fixed;
+    radial-gradient(900px 400px at 20% -10%, #12233a 0%, transparent 60%),
+    linear-gradient(180deg, #0a1728 0%, transparent 30%),
+    linear-gradient(180deg, var(--bg1), var(--bg0));
   color: var(--text);
   font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
-  position: relative;
-  overflow-x: hidden;
 }
-
-/* Animated aurora blobs (behind everything) */
-body::before,
-body::after {
-  content: "";
-  position: fixed;
-  inset: -25%;
-  pointer-events: none;
-  z-index: 0;                 /* content will sit above; we set containers to z-index:1 */
-  filter: blur(48px) saturate(135%);
-  opacity: .75;
-  transform: translate3d(0,0,0);
-}
-body::before {
-  /* cool blue + magenta + teal + amber */
-  background:
-    radial-gradient(35% 26% at 20% 35%, rgba(30,163,255,.40), rgba(30,163,255,0) 65%),
-    radial-gradient(40% 28% at 82% 22%, rgba(236,72,153,.30), rgba(236,72,153,0) 65%),
-    radial-gradient(45% 32% at 62% 80%, rgba(16,185,129,.28), rgba(16,185,129,0) 70%),
-    radial-gradient(30% 24% at 28% 78%, rgba(245,158,11,.22), rgba(245,158,11,0) 70%);
-  animation: auroraFloat1 24s ease-in-out infinite alternate,
-             hueDrift 60s linear infinite;
-}
-body::after {
-  /* deeper pass for richness */
-  background:
-    radial-gradient(28% 22% at 78% 65%, rgba(56,189,248,.28), rgba(56,189,248,0) 65%),
-    radial-gradient(30% 24% at 22% 10%, rgba(147,51,234,.22), rgba(147,51,234,0) 70%),
-    radial-gradient(24% 20% at 48% 92%, rgba(34,197,94,.22), rgba(34,197,94,0) 70%);
-  mix-blend-mode: screen;
-  opacity: .55;
-  animation: auroraFloat2 32s ease-in-out infinite alternate-reverse,
-             hueDrift 80s linear infinite reverse;
-}
-
-/* Soft vignette to focus content */
-body > .vignette,
-body::marker { /* placeholder to avoid accidental styling of markers */ }
-body:has(.vignette){} /* no-op for compatibility */
-
-body::marker{} /* noop */
-
-@keyframes auroraFloat1 {
-  0%   { transform: translate3d(0,0,0) scale(1); }
-  100% { transform: translate3d(-2%, -3%, 0) scale(1.05); }
-}
-@keyframes auroraFloat2 {
-  0%   { transform: translate3d(0,0,0) scale(1); }
-  100% { transform: translate3d(2%, -2%, 0) scale(1.06); }
-}
-@keyframes hueDrift { 
-  0%   { filter: blur(48px) saturate(135%) hue-rotate(0deg); }
-  100% { filter: blur(48px) saturate(135%) hue-rotate(18deg); }
-}
-
-/* Lift the real content above the aurora */
-.hero, .container { position: relative; z-index: 1; }
 
 /* ======= Header ======= */
 .hero{
@@ -124,7 +59,7 @@ h1{ margin: 0 0 6px; font-size: 28px; }
   background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));
   border: 1px solid var(--border);
   border-radius: 16px;
-  box-shadow: 0 16px 48px var(--shadow);
+  box-shadow: 0 12px 40px var(--shadow);
 }
 
 /* Controls */
@@ -147,7 +82,6 @@ h1{ margin: 0 0 6px; font-size: 28px; }
   color: var(--text);
   outline: none;
   transition: box-shadow .15s ease, border-color .15s ease, transform .05s ease;
-  backdrop-filter: blur(2px);
 }
 #search-input::placeholder{ color: #7a8595; }
 #search-input:focus, #movie-select:focus{
@@ -164,7 +98,7 @@ h1{ margin: 0 0 6px; font-size: 28px; }
   font-weight: 800;
   cursor: pointer;
   transition: background .12s ease, transform .05s ease, box-shadow .12s ease;
-  box-shadow: 0 10px 22px rgba(30,163,255,.28);
+  box-shadow: 0 8px 18px rgba(30,163,255,.25);
 }
 .btn:hover{ background: var(--accent-strong); }
 .btn:active{ transform: translateY(1px); }
@@ -200,7 +134,7 @@ h1{ margin: 0 0 6px; font-size: 28px; }
 .movie-card:hover{
   transform: translateY(-2px);
   border-color: rgba(30,163,255,.55);
-  box-shadow: 0 14px 40px rgba(0,0,0,.55);
+  box-shadow: 0 12px 36px rgba(0,0,0,.55);
 }
 .poster{
   width: 100%;
@@ -221,7 +155,6 @@ h1{ margin: 0 0 6px; font-size: 28px; }
   font-size: 14px;
   font-weight: 800;
   line-height: 1.2;
-  text-shadow: 0 2px 8px rgba(0,0,0,.6);
 }
 .badge{
   position: absolute;
@@ -240,7 +173,7 @@ h1{ margin: 0 0 6px; font-size: 28px; }
   box-shadow: 0 4px 14px rgba(34,197,94,.45);
 }
 
-/* ======= Modal (unchanged from previous step) ======= */
+/* ======= Modal ======= */
 .hidden { display: none; }
 
 .modal{
@@ -287,6 +220,7 @@ h1{ margin: 0 0 6px; font-size: 28px; }
   padding: 18px;
 }
 
+/* Modal content pieces */
 .modal__poster{
   width: 100%;
   aspect-ratio: 2/3;
@@ -295,8 +229,16 @@ h1{ margin: 0 0 6px; font-size: 28px; }
   border: 1px solid var(--border);
   background: #0b0f1a;
 }
-.modal__title{ margin: 0 0 6px; font-size: 22px; font-weight: 800; }
-.modal__subtitle{ margin: 0 0 12px; color: var(--muted); font-weight: 600; }
+.modal__title{
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 800;
+}
+.modal__subtitle{
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
 .section-title{
   margin: 14px 0 6px;
   font-size: 12px;
@@ -314,7 +256,11 @@ h1{ margin: 0 0 6px; font-size: 28px; }
   font-size: 12px;
 }
 
-.contrib{ display: grid; gap: 6px; }
+/* Contribution rows in modal */
+.contrib{
+  display: grid;
+  gap: 6px;
+}
 .contrib-row{
   display: grid;
   grid-template-columns: 140px 1fr 50px;
