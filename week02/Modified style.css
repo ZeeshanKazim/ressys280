@@ -70,3 +70,26 @@ h1 {
 .loading {
     color: #7f8c8d;
 }
+
+.recommendation-list {
+    list-style-type: none;
+    padding: 0;
+}
+
+.recommendation-list li {
+    padding: 8px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.recommendation-list li:last-child {
+    border-bottom: none;
+}
+
+/* Highlight the different approach */
+.highlight {
+    background-color: #fff3cd;
+    border-left: 4px solid #ffeeba;
+    padding: 10px;
+    margin-top: 15px;
+    border-radius: 4px;
+}
