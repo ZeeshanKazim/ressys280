@@ -1,5 +1,7 @@
-/* UI + Cosine Similarity Recommender (Prime/Hotstar style) */
+/* UI + Cosine Similarity Recommender with Click-to-Details Modal */
 "use strict";
+
+let lastLikedMovie = null; // remember the liked movie for modal breakdowns
 
 /** ====== Initialization ====== */
 window.addEventListener("DOMContentLoaded", async () => {
@@ -7,14 +9,13 @@ window.addEventListener("DOMContentLoaded", async () => {
   const btn = document.getElementById("recommend-btn");
 
   if (resultEl) resultEl.textContent = "Initializing…";
-
   await loadData();              // from data.js
 
   populateMoviesDropdown();
   wireSearch();
 
-  // Wire the click in JS (more reliable than inline onclick)
   if (btn) btn.addEventListener("click", getRecommendations);
+  wireModal(); // close interactions
 
   if (resultEl) resultEl.textContent = "Data loaded. Please select a movie.";
 });
@@ -26,8 +27,6 @@ function populateMoviesDropdown(list = movies) {
   if (!select) return;
 
   const prev = select.value || "";
-
-  // Clear all except placeholder
   select.querySelectorAll("option:not([value=''])").forEach((opt) => opt.remove());
 
   if (!Array.isArray(list) || list.length === 0) {
@@ -43,13 +42,10 @@ function populateMoviesDropdown(list = movies) {
     select.appendChild(opt);
   }
 
-  // Preserve selection if still present after filtering
-  if ([...select.options].some(o => o.value === prev)) {
-    select.value = prev;
-  }
+  if ([...select.options].some(o => o.value === prev)) select.value = prev;
 }
 
-/** ====== Search that filters the dropdown options ====== */
+/** ====== Search ====== */
 function wireSearch() {
   const input = document.getElementById("search-input");
   const select = document.getElementById("movie-select");
@@ -63,7 +59,6 @@ function wireSearch() {
     if (filtered.length === 1) select.value = String(filtered[0].id);
   });
 
-  // Enter triggers recommendations
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && btn) btn.click();
   });
@@ -84,23 +79,152 @@ function clearRecommendations() {
   const grid = document.getElementById("recommendations");
   if (grid) grid.innerHTML = "";
 }
-
-/** If nothing selected (e.g., placeholder), auto-select the first real option. */
 function ensureSelection() {
   const select = document.getElementById("movie-select");
   if (!select) return null;
   const chosen = select.value;
   if (chosen) return chosen;
-  // Pick first non-empty option if available
   const firstReal = [...select.options].find(o => o.value !== "");
-  if (firstReal) {
-    select.value = firstReal.value;
-    return firstReal.value;
-  }
+  if (firstReal) { select.value = firstReal.value; return firstReal.value; }
   return null;
 }
 
-function createMovieCard(movie, percentMatch) {
+/** ====== Per-genre breakdown ====== */
+function computeBreakdown(liked, cand) {
+  const likedSet = new Set(liked.genres || []);
+  const candSet  = new Set(cand.genres  || []);
+
+  const overlap   = [...likedSet].filter(g => candSet.has(g));
+  const onlyLiked = [...likedSet].filter(g => !candSet.has(g));
+  const onlyCand  = [...candSet].filter(g => !likedSet.has(g));
+
+  const lenA = (liked.genres || []).length;
+  const lenB = (cand.genres  || []).length;
+  const nA = Math.sqrt(lenA);
+  const nB = Math.sqrt(lenB);
+  const perGenrePct = (nA > 0 && nB > 0) ? (100 / (nA * nB)) : 0;
+
+  const contributions = overlap.map(g => ({
+    genre: g,
+    pct: Math.round(perGenrePct * 10) / 10
+  }));
+
+  return { overlap, onlyLiked, onlyCand, contributions };
+}
+
+/** ====== Modal UI ====== */
+function wireModal() {
+  const modal = document.getElementById("modal");
+  const backdrop = modal.querySelector(".modal__backdrop");
+  const closeBtn = document.getElementById("modal-close");
+
+  const close = () => {
+    modal.classList.add("hidden");
+    modal.setAttribute("aria-hidden", "true");
+  };
+
+  backdrop.addEventListener("click", close);
+  closeBtn.addEventListener("click", close);
+  window.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+
+  // expose for other functions
+  window.__closeModal = close;
+}
+
+function openModal(liked, movie, percentMatch, breakdown) {
+  const modal = document.getElementById("modal");
+  const content = document.getElementById("modal-content");
+
+  // Build content safely with DOM nodes
+  content.innerHTML = "";
+
+  // Left: poster
+  const poster = document.createElement("img");
+  poster.className = "modal__poster";
+  poster.src = movie.poster;
+  poster.alt = movie.title;
+
+  // Right: details
+  const right = document.createElement("div");
+
+  const h = document.createElement("h2");
+  h.className = "modal__title";
+  h.textContent = movie.title;
+
+  const sub = document.createElement("p");
+  sub.className = "modal__subtitle";
+  sub.textContent = `Match: ${percentMatch}% — because you liked “${liked.title}”`;
+
+  // sections
+  const mkSection = (titleText, items) => {
+    const t = document.createElement("p");
+    t.className = "section-title";
+    t.textContent = titleText;
+
+    const chips = document.createElement("div");
+    chips.className = "chips";
+    if (items && items.length) {
+      items.forEach(g => { const c = document.createElement("span"); c.className = "chip"; c.textContent = g; chips.appendChild(c); });
+    } else {
+      const c = document.createElement("span"); c.className = "chip"; c.textContent = "— none —"; chips.appendChild(c);
+    }
+    right.appendChild(t); right.appendChild(chips);
+  };
+
+  mkSection("Shared genres", breakdown.overlap);
+  mkSection(`Only in “${liked.title}”`, breakdown.onlyLiked);
+  mkSection("Only in recommendation", breakdown.onlyCand);
+
+  // Contributions
+  const t4 = document.createElement("p");
+  t4.className = "section-title";
+  t4.textContent = "Contribution to match";
+  right.appendChild(t4);
+
+  const list = document.createElement("div");
+  list.className = "contrib";
+  if (breakdown.contributions.length) {
+    breakdown.contributions.forEach(({ genre, pct }) => {
+      const row = document.createElement("div");
+      row.className = "contrib-row";
+
+      const label = document.createElement("div");
+      label.className = "contrib-label";
+      label.textContent = genre;
+
+      const bar = document.createElement("div");
+      bar.className = "contrib-bar";
+      const fill = document.createElement("div");
+      fill.className = "contrib-fill";
+      fill.style.width = `${pct}%`;
+      bar.appendChild(fill);
+
+      const pctEl = document.createElement("div");
+      pctEl.className = "contrib-pct";
+      pctEl.textContent = `${pct}%`;
+
+      row.appendChild(label);
+      row.appendChild(bar);
+      row.appendChild(pctEl);
+      list.appendChild(row);
+    });
+  } else {
+    const p = document.createElement("p");
+    p.className = "empty";
+    p.textContent = "No shared genres, so cosine is 0%.";
+    list.appendChild(p);
+  }
+  right.appendChild(list);
+
+  content.appendChild(poster);
+  content.appendChild(right);
+
+  modal.classList.remove("hidden");
+  modal.setAttribute("aria-hidden", "false");
+}
+
+/** ====== Build one card ====== */
+function createMovieCard(movie, percentMatch, liked) {
   const card = document.createElement("article");
   card.className = "movie-card";
   card.setAttribute("tabindex", "0");
@@ -129,6 +253,21 @@ function createMovieCard(movie, percentMatch) {
   card.appendChild(footer);
   card.appendChild(badge);
 
+  // Click to open modal with detailed similarity
+  card.addEventListener("click", () => {
+    const breakdown = computeBreakdown(liked, movie);
+    openModal(liked, movie, percentMatch, breakdown);
+  });
+
+  // Keyboard access (Enter/Space)
+  card.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      const breakdown = computeBreakdown(liked, movie);
+      openModal(liked, movie, percentMatch, breakdown);
+    }
+  });
+
   return card;
 }
 
@@ -140,7 +279,6 @@ function getRecommendations() {
   if (!select || !grid) return;
 
   try {
-    // Ensure we have a valid selection
     const selectedVal = ensureSelection();
     const selectedId = Number.parseInt(selectedVal, 10);
 
@@ -157,24 +295,20 @@ function getRecommendations() {
       return;
     }
 
-    // Candidates (exclude liked)
+    lastLikedMovie = likedMovie; // remember for modal
+
     const candidates = movies.filter(m => Number(m.id) !== selectedId);
 
-    // Score
     const scored = candidates.map(cand => ({
       movie: cand,
       score: cosineSimilarity(likedMovie.genreVector, cand.genreVector)
     }));
 
-    // Sort and take top N
     scored.sort((a, b) => b.score - a.score);
-    const TOP_N = 10;
+    const TOP_N = 8;
     const top = scored.slice(0, TOP_N);
 
-    // Render
-    if (resultEl) {
-      resultEl.textContent = `Because you liked “${likedMovie.title}”, your similar picks:`;
-    }
+    if (resultEl) resultEl.textContent = `Because you liked “${likedMovie.title}”, your similar picks:`;
     clearRecommendations();
 
     if (!top.length) {
@@ -187,7 +321,7 @@ function getRecommendations() {
 
     for (const { movie, score } of top) {
       const percent = Math.round(score * 100);
-      grid.appendChild(createMovieCard(movie, percent));
+      grid.appendChild(createMovieCard(movie, percent, likedMovie));
     }
   } catch (err) {
     console.error(err);
