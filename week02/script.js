@@ -1,157 +1,110 @@
-/* ---------------- Cosine similarity on genre multi-hot ---------------- */
-let genreVocab = [];
-const movieVec = new Map();
-const itemStats = new Map(); // popularity for "Top Picks"
-
-/* Build vocab and vectors */
-function buildGenreVocab(){
-  const s = new Set();
-  movies.forEach(m => m.genres.forEach(g => s.add(g)));
-  genreVocab = Array.from(s).sort();
-}
-function toVec(genres){
-  const set = new Set(genres);
-  return genreVocab.map(g => (set.has(g) ? 1 : 0));
-}
-function precomputeVectors(){
-  buildGenreVocab();
-  movieVec.clear();
-  movies.forEach(m => movieVec.set(m.id, toVec(m.genres)));
-}
-function cosine(a,b){
-  let dot=0, na=0, nb=0;
-  for (let i=0;i<a.length;i++){ const ai=a[i], bi=b[i]; dot+=ai*bi; na+=ai*ai; nb+=bi*bi; }
-  return (na && nb) ? dot / (Math.sqrt(na)*Math.sqrt(nb)) : 0;
-}
-
-/* Popularity stats (for a nice "Top Picks" rail) */
-function computeStats(){
-  itemStats.clear();
-  for (const r of ratings){
-    const s = itemStats.get(r.itemId) || {count:0,sum:0,avg:0};
-    s.count++; s.sum += r.rating; itemStats.set(r.itemId, s);
-  }
-  for (const [id,s] of itemStats){ s.avg = s.sum / s.count; }
-}
-function getTopPicks(n=18){
-  const withStats = movies.map(m => ({ m, s: itemStats.get(m.id) || {count:0, avg:0} }));
-  withStats.sort((a,b) => (b.s.count - a.s.count) || (b.s.avg - a.s.avg));
-  return withStats.slice(0,n).map(x => x.m);
-}
-
-/* ---------------- UI helpers ---------------- */
-function $(id){ return document.getElementById(id); }
-function populateMoviesDropdown(){
-  const sel = $('movie-select');
-  while (sel.options.length > 1) sel.remove(1);
-  const sorted = [...movies].sort((a,b)=>a.title.localeCompare(b.title));
-  for (const m of sorted){
-    const opt = document.createElement('option');
-    opt.value = String(m.id);
-    opt.textContent = m.title;
-    sel.appendChild(opt);
-  }
-}
-function titleInitials(t){
-  return t.split(/[\s:–-]+/).filter(Boolean).slice(0,2).map(x=>x[0]).join('').toUpperCase();
-}
-function gradFromId(id){
-  const h = (id*37) % 360, h2 = (h+40)%360;
-  return `linear-gradient(160deg, hsla(${h},70%,45%,.9), hsla(${h2},70%,35%,.9))`;
-}
-function makeCard(m){
-  const card = document.createElement('div'); card.className='card'; card.title = m.title;
-
-  const poster = document.createElement('div'); poster.className='poster';
-  poster.style.setProperty('--grad', gradFromId(m.id));
-  poster.textContent = titleInitials(m.title);
-
-  const meta = document.createElement('div'); meta.className='meta';
-  const h = document.createElement('p'); h.className='title'; h.textContent = m.title;
-  const chips = document.createElement('div'); chips.className='chips';
-  m.genres.slice(0,3).forEach(g => {
-    const s = document.createElement('span'); s.className='chip-mini'; s.textContent = g;
-    chips.appendChild(s);
-  });
-
-  meta.appendChild(h); meta.appendChild(chips);
-  card.appendChild(poster); card.appendChild(meta);
-
-  card.addEventListener('click', () => {
-    $('movie-select').value = String(m.id);
-    getRecommendations();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  });
-  return card;
-}
-function renderRow(containerId, list){
-  const row = $(containerId);
-  row.innerHTML = '';
-  list.forEach(m => row.appendChild(makeCard(m)));
-}
-
-/* ---------------- Search ---------------- */
-function setupSearch(){
-  const input = $('search');
-  const section = $('search-section');
-  input.addEventListener('input', () => {
-    const q = input.value.trim().toLowerCase();
-    if (!q){
-      section.classList.add('hidden');
-      renderRow('row-popular', getTopPicks());
-      return;
+/**
+ * Initialize application when window loads
+ */
+window.onload = async function() {
+    try {
+        // Wait for data to load
+        await loadData();
+        
+        // Populate the movie dropdown
+        populateMoviesDropdown();
+        
+        // Update status message
+        document.getElementById('result').textContent = 
+            'Data loaded. Please select a movie.';
+            
+        // Add event listener to the recommendation button
+        document.getElementById('recommend-btn').addEventListener('click', getRecommendations);
+    } catch (error) {
+        console.error('Error initializing application:', error);
     }
-    const matches = movies.filter(m => m.title.toLowerCase().includes(q)).slice(0, 30);
-    section.classList.toggle('hidden', matches.length === 0);
-    renderRow('row-search', matches);
-  });
-}
-
-/* ---------------- Theme toggle ---------------- */
-function setupTheme(){
-  $('btn-prime').addEventListener('click', ()=> document.body.setAttribute('data-theme','prime'));
-  $('btn-netflix').addEventListener('click', ()=> document.body.setAttribute('data-theme','netflix'));
-}
-
-/* ---------------- Main recommendation (COSINE) ---------------- */
-function getRecommendations(){
-  const res = $('result');
-  const sel = $('movie-select');
-  const idStr = sel.value;
-  if (!idStr){ res.textContent = 'Please select a movie first.'; return; }
-
-  const likedId = parseInt(idStr,10);
-  const liked = movies.find(m => m.id === likedId);
-  if (!liked){ res.textContent = 'Selected movie not found.'; return; }
-
-  const likedVec = movieVec.get(likedId) || toVec(liked.genres);
-  const candidates = movies.filter(m => m.id !== likedId);
-
-  const scored = candidates.map(c => {
-    const s = cosine(likedVec, movieVec.get(c.id) || toVec(c.genres));
-    return { ...c, score: s };
-  }).sort((a,b)=>b.score - a.score);
-
-  const top = scored.slice(0, 18);
-  renderRow('row-recs', top);
-
-  $('row-recs').parentElement.querySelector('.row-title').textContent =
-    `Because you liked: ${liked.title}`;
-  res.textContent = `Using Cosine Similarity • ${top.length} similar titles`;
-}
-
-/* ---------------- Init ---------------- */
-window.onload = async () => {
-  try{
-    await loadData();          // from data.js
-    precomputeVectors();       // cosine vectors
-    computeStats();            // popularity for "Top Picks"
-
-    setupTheme();
-    setupSearch();
-    populateMoviesDropdown();
-    renderRow('row-popular', getTopPicks());
-
-    const r = $('result'); r.textContent = 'Data loaded. Select a movie or search.';
-  }catch(e){ /* data.js already shows an error */ }
 };
+
+/**
+ * Populate the movie dropdown with available movies
+ */
+function populateMoviesDropdown() {
+    const movieSelect = document.getElementById('movie-select');
+    
+    // Clear existing options except the first one
+    while (movieSelect.options.length > 1) {
+        movieSelect.remove(1);
+    }
+    
+    // Sort movies alphabetically by title
+    const sortedMovies = [...movies].sort((a, b) => {
+        return a.title.localeCompare(b.title);
+    });
+    
+    // Add movies to dropdown
+    sortedMovies.forEach(movie => {
+        const option = document.createElement('option');
+        option.value = movie.id;
+        option.textContent = movie.title;
+        movieSelect.appendChild(option);
+    });
+}
+
+/**
+ * Calculate Jaccard similarity between two sets
+ * @param {Set} setA - First set
+ * @param {Set} setB - Second set
+ * @returns {number} Jaccard similarity coefficient
+ */
+function calculateJaccardSimilarity(setA, setB) {
+    const intersection = new Set([...setA].filter(x => setB.has(x)));
+    const union = new Set([...setA, ...setB]);
+    
+    return union.size === 0 ? 0 : intersection.size / union.size;
+}
+
+/**
+ * Get recommendations based on the selected movie
+ */
+function getRecommendations() {
+    // Step 1: Get user input
+    const movieSelect = document.getElementById('movie-select');
+    const selectedMovieId = parseInt(movieSelect.value);
+    const resultElement = document.getElementById('result');
+    
+    if (!selectedMovieId) {
+        resultElement.textContent = 'Please select a movie first.';
+        return;
+    }
+    
+    // Step 2: Find liked movie
+    const likedMovie = movies.find(movie => movie.id === selectedMovieId);
+    if (!likedMovie) {
+        resultElement.textContent = 'Selected movie not found.';
+        return;
+    }
+    
+    // Step 3: Prepare for similarity calculation
+    const likedMovieGenres = new Set(likedMovie.genres);
+    const candidateMovies = movies.filter(movie => movie.id !== likedMovie.id);
+    
+    // Step 4: Calculate similarity scores
+    const scoredMovies = candidateMovies.map(candidateMovie => {
+        const candidateGenres = new Set(candidateMovie.genres);
+        const score = calculateJaccardSimilarity(likedMovieGenres, candidateGenres);
+        
+        return {
+            ...candidateMovie,
+            score: score
+        };
+    });
+    
+    // Step 5: Sort by score (descending)
+    scoredMovies.sort((a, b) => b.score - a.score);
+    
+    // Step 6: Select top recommendations
+    const topRecommendations = scoredMovies.slice(0, 2);
+    
+    // Step 7: Display results
+    if (topRecommendations.length > 0) {
+        const recommendationTitles = topRecommendations.map(movie => movie.title);
+        resultElement.innerHTML = `Because you liked '<strong>${likedMovie.title}</strong>', we recommend: <strong>${recommendationTitles.join('</strong>, <strong>')}</strong>`;
+    } else {
+        resultElement.textContent = 'No recommendations found.';
+    }
+}
