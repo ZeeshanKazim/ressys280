@@ -2,30 +2,40 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Content-Based Movie Recommender</title>
   <link rel="stylesheet" href="style.css" />
 </head>
-<body>
+<body data-theme="prime">
   <header class="nav">
-    <div class="brand">Prime-Style Movies</div>
-    <input id="search" class="search" placeholder="Search titles…" />
+    <div class="brand">C I N E M A</div>
+
+    <div class="theme">
+      <button id="btn-prime" class="chip">Prime</button>
+      <button id="btn-netflix" class="chip">Netflix</button>
+    </div>
+
+    <input id="search" class="search" placeholder="Search movies…" />
   </header>
 
   <main class="wrap">
     <section class="hero">
       <h1>Find your next favorite</h1>
-      <p>Cosine similarity over genres. Select a movie to see similar ones.</p>
+      <p class="muted">Cosine similarity over genres. Select a movie or search.</p>
 
       <div class="controls">
         <select id="movie-select" aria-label="Select a movie">
           <option value="">— Select a Movie —</option>
         </select>
-        <!-- per homework: button calls getRecommendations() -->
         <button id="recommend-btn" onclick="getRecommendations()">Get Recommendations</button>
       </div>
 
       <div id="result-box"><p id="result" class="muted">Loading data…</p></div>
+    </section>
+
+    <section id="search-section" class="hidden">
+      <h2 class="row-title">Search Results</h2>
+      <div id="row-search" class="row"></div>
     </section>
 
     <section>
@@ -39,7 +49,7 @@
     </section>
   </main>
 
-  <!-- Order matters -->
+  <!-- Order matters: data.js first -->
   <script src="data.js"></script>
   <script src="script.js"></script>
 </body>
