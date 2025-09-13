@@ -117,12 +117,11 @@ h1{ margin: 0 0 6px; font-size: 28px; }
 /* Grid */
 .cards-grid{
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 16px;
 }
 
 /* Card */
-.movie-tile{}
 .movie-card{
   background: var(--card);
   border-radius: 12px;
@@ -174,90 +173,110 @@ h1{ margin: 0 0 6px; font-size: 28px; }
   box-shadow: 0 4px 14px rgba(34,197,94,.45);
 }
 
-/* ======= Breakdown (per-genre details) ======= */
-.breakdown{
-  margin-top: 8px;
-  background: #0c1220;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  overflow: hidden;
-}
-.breakdown > summary{
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  cursor: pointer;
-  list-style: none;
-  padding: 10px 12px;
-  font-weight: 800;
-  color: var(--text);
-  background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));
-  border-bottom: 1px solid var(--border);
-}
-.breakdown > summary::-webkit-details-marker { display: none; }
-.breakdown .caret {
-  width: 0; height: 0;
-  border-left: 6px solid transparent;
-  border-right: 6px solid transparent;
-  border-top: 7px solid var(--muted);
-  transition: transform .2s ease;
-}
-.breakdown[open] .caret { transform: rotate(180deg); }
+/* ======= Modal ======= */
+.hidden { display: none; }
 
-.breakdown-content{
-  padding: 10px 12px 12px;
+.modal{
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
   display: grid;
-  gap: 10px;
+  place-items: center;
+}
+.modal__backdrop{
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,.6);
+  backdrop-filter: blur(2px);
+}
+.modal__dialog{
+  position: relative;
+  background: #0b1220;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  width: min(980px, 94vw);
+  max-height: 90vh;
+  overflow: auto;
+  box-shadow: 0 24px 60px rgba(0,0,0,.55);
+}
+.modal__close{
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 20px;
+  line-height: 1;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.modal__content{
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 16px;
+  padding: 18px;
 }
 
-.group-title{
-  margin: 0;
+/* Modal content pieces */
+.modal__poster{
+  width: 100%;
+  aspect-ratio: 2/3;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: #0b0f1a;
+}
+.modal__title{
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 800;
+}
+.modal__subtitle{
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.section-title{
+  margin: 14px 0 6px;
   font-size: 12px;
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: .4px;
 }
-
-.chips{ display: flex; flex-wrap: wrap; gap: 6px; }
+.chips{ display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
 .chip{
   background: #101a2c;
   color: #cbd5e1;
   border: 1px solid var(--border);
-  padding: 3px 8px;
+  padding: 4px 10px;
   border-radius: 999px;
   font-size: 12px;
 }
 
-/* Contribution rows */
+/* Contribution rows in modal */
 .contrib{
   display: grid;
   gap: 6px;
 }
 .contrib-row{
   display: grid;
-  grid-template-columns: 130px 1fr 46px;
+  grid-template-columns: 140px 1fr 50px;
   align-items: center;
   gap: 8px;
 }
-.contrib-label{ font-size: 12px; color: var(--text); }
+.contrib-label{ font-size: 13px; }
 .contrib-bar{
-  position: relative;
   height: 8px;
   border: 1px solid var(--border);
   background: #0a1424;
   border-radius: 999px;
   overflow: hidden;
 }
-.contrib-fill{
-  height: 100%;
-  background: var(--accent);
-  width: 0%;
-}
-.contrib-pct{
-  font-size: 12px;
-  font-weight: 800;
-  text-align: right;
-}
+.contrib-fill{ height: 100%; background: var(--accent); width: 0%; }
+.contrib-pct{ text-align: right; font-weight: 800; font-size: 12px; }
 
 /* Empty state */
 .empty{ color: var(--muted); font-weight: 600; }
