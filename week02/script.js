@@ -1,45 +1,37 @@
-/* ---------- Cosine similarity over genre multi-hot vectors ---------- */
+/* ---------------- Cosine similarity on genre multi-hot ---------------- */
 let genreVocab = [];
 const movieVec = new Map();
-const itemStats = new Map(); // {count, sum, avg}
+const itemStats = new Map(); // popularity for "Top Picks"
 
-/* Build genre vocabulary from movies */
+/* Build vocab and vectors */
 function buildGenreVocab(){
   const s = new Set();
   movies.forEach(m => m.genres.forEach(g => s.add(g)));
   genreVocab = Array.from(s).sort();
 }
-
-/* Convert genres[] -> binary vector aligned with vocab */
 function toVec(genres){
   const set = new Set(genres);
   return genreVocab.map(g => (set.has(g) ? 1 : 0));
 }
-
-/* Precompute vectors for all movies */
 function precomputeVectors(){
   buildGenreVocab();
   movieVec.clear();
   movies.forEach(m => movieVec.set(m.id, toVec(m.genres)));
 }
-
-/* Cosine similarity */
 function cosine(a,b){
   let dot=0, na=0, nb=0;
   for (let i=0;i<a.length;i++){ const ai=a[i], bi=b[i]; dot+=ai*bi; na+=ai*ai; nb+=bi*bi; }
   return (na && nb) ? dot / (Math.sqrt(na)*Math.sqrt(nb)) : 0;
 }
 
-/* Basic popularity stats from ratings to show "Top Picks" row */
+/* Popularity stats (for a nice "Top Picks" rail) */
 function computeStats(){
   itemStats.clear();
   for (const r of ratings){
     const s = itemStats.get(r.itemId) || {count:0,sum:0,avg:0};
     s.count++; s.sum += r.rating; itemStats.set(r.itemId, s);
   }
-  for (const [id,s] of itemStats){
-    s.avg = s.sum / s.count;
-  }
+  for (const [id,s] of itemStats){ s.avg = s.sum / s.count; }
 }
 function getTopPicks(n=18){
   const withStats = movies.map(m => ({ m, s: itemStats.get(m.id) || {count:0, avg:0} }));
@@ -47,9 +39,8 @@ function getTopPicks(n=18){
   return withStats.slice(0,n).map(x => x.m);
 }
 
-/* ----------------------- UI Helpers ----------------------- */
+/* ---------------- UI helpers ---------------- */
 function $(id){ return document.getElementById(id); }
-
 function populateMoviesDropdown(){
   const sel = $('movie-select');
   while (sel.options.length > 1) sel.remove(1);
@@ -61,17 +52,15 @@ function populateMoviesDropdown(){
     sel.appendChild(opt);
   }
 }
-
 function titleInitials(t){
   return t.split(/[\s:–-]+/).filter(Boolean).slice(0,2).map(x=>x[0]).join('').toUpperCase();
 }
 function gradFromId(id){
-  const h = (id*37) % 360;
-  const h2 = (h+40)%360;
+  const h = (id*37) % 360, h2 = (h+40)%360;
   return `linear-gradient(160deg, hsla(${h},70%,45%,.9), hsla(${h2},70%,35%,.9))`;
 }
 function makeCard(m){
-  const card = document.createElement('div'); card.className = 'card'; card.title = m.title;
+  const card = document.createElement('div'); card.className='card'; card.title = m.title;
 
   const poster = document.createElement('div'); poster.className='poster';
   poster.style.setProperty('--grad', gradFromId(m.id));
@@ -80,14 +69,14 @@ function makeCard(m){
   const meta = document.createElement('div'); meta.className='meta';
   const h = document.createElement('p'); h.className='title'; h.textContent = m.title;
   const chips = document.createElement('div'); chips.className='chips';
-  (m.genres.slice(0,3)).forEach(g=>{
-    const c=document.createElement('span'); c.className='chip'; c.textContent=g; chips.appendChild(c);
+  m.genres.slice(0,3).forEach(g => {
+    const s = document.createElement('span'); s.className='chip-mini'; s.textContent = g;
+    chips.appendChild(s);
   });
 
   meta.appendChild(h); meta.appendChild(chips);
   card.appendChild(poster); card.appendChild(meta);
 
-  // click a card to simulate selecting it
   card.addEventListener('click', () => {
     $('movie-select').value = String(m.id);
     getRecommendations();
@@ -101,7 +90,30 @@ function renderRow(containerId, list){
   list.forEach(m => row.appendChild(makeCard(m)));
 }
 
-/* -------------------- Main Recommendation -------------------- */
+/* ---------------- Search ---------------- */
+function setupSearch(){
+  const input = $('search');
+  const section = $('search-section');
+  input.addEventListener('input', () => {
+    const q = input.value.trim().toLowerCase();
+    if (!q){
+      section.classList.add('hidden');
+      renderRow('row-popular', getTopPicks());
+      return;
+    }
+    const matches = movies.filter(m => m.title.toLowerCase().includes(q)).slice(0, 30);
+    section.classList.toggle('hidden', matches.length === 0);
+    renderRow('row-search', matches);
+  });
+}
+
+/* ---------------- Theme toggle ---------------- */
+function setupTheme(){
+  $('btn-prime').addEventListener('click', ()=> document.body.setAttribute('data-theme','prime'));
+  $('btn-netflix').addEventListener('click', ()=> document.body.setAttribute('data-theme','netflix'));
+}
+
+/* ---------------- Main recommendation (COSINE) ---------------- */
 function getRecommendations(){
   const res = $('result');
   const sel = $('movie-select');
@@ -120,39 +132,26 @@ function getRecommendations(){
     return { ...c, score: s };
   }).sort((a,b)=>b.score - a.score);
 
-  const top = scored.slice(0, 18); // fill a nice row
+  const top = scored.slice(0, 18);
   renderRow('row-recs', top);
 
   $('row-recs').parentElement.querySelector('.row-title').textContent =
     `Because you liked: ${liked.title}`;
-  res.textContent = `Showing cosine-similar titles to "${liked.title}"`;
+  res.textContent = `Using Cosine Similarity • ${top.length} similar titles`;
 }
 
-/* -------------------- Search (simple filter) -------------------- */
-function setupSearch(){
-  const input = $('search');
-  input.addEventListener('input', () => {
-    const q = input.value.trim().toLowerCase();
-    if (!q){ renderRow('row-popular', getTopPicks()); return; }
-    const matches = movies.filter(m => m.title.toLowerCase().includes(q)).slice(0, 30);
-    renderRow('row-popular', matches);
-  });
-}
-
-/* -------------------- Init -------------------- */
+/* ---------------- Init ---------------- */
 window.onload = async () => {
   try{
     await loadData();          // from data.js
-    precomputeVectors();       // build cosine vectors
-    computeStats();            // for "Top Picks"
+    precomputeVectors();       // cosine vectors
+    computeStats();            // popularity for "Top Picks"
 
+    setupTheme();
+    setupSearch();
     populateMoviesDropdown();
     renderRow('row-popular', getTopPicks());
-    setupSearch();
 
-    const r = $('result'); r.textContent = 'Data loaded. Using Cosine Similarity.';
-    r.classList.remove('muted');
-  }catch(e){
-    /* data.js already shows a friendly message */
-  }
+    const r = $('result'); r.textContent = 'Data loaded. Select a movie or search.';
+  }catch(e){ /* data.js already shows an error */ }
 };
