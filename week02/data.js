@@ -1,95 +1,115 @@
-// Global variables to store movie and rating data
+/* Data Handling Module
+ * --------------------
+ * Responsible for fetching and parsing local MovieLens files:
+ *  - u.item : movie metadata with genre flags
+ *  - u.data : user ratings
+ * Exposes:
+ *   - globals: movies[], ratings[]
+ *   - async function: loadData()
+ *   - parsers: parseItemData(text), parseRatingData(text)
+ */
+
+"use strict";
+
+// Global state (required by spec)
 let movies = [];
 let ratings = [];
 
 /**
- * Array of genre names in the order they appear in the u.item file
- */
-const genreNames = [
-    "Action", "Adventure", "Animation", "Children's", "Comedy",
-    "Crime", "Documentary", "Drama", "Fantasy", "Film-Noir",
-    "Horror", "Musical", "Mystery", "Romance", "Sci-Fi",
-    "Thriller", "War", "Western"
-];
-
-/**
- * Load and parse data from local files
- * @returns {Promise} Promise that resolves when data is loaded
+ * Load and parse data files from the same directory.
+ * Uses sequential awaits per specification.
  */
 async function loadData() {
-    try {
-        // Load and parse movie data
-        const moviesResponse = await fetch('u.item');
-        if (!moviesResponse.ok) {
-            throw new Error('Failed to load movie data');
-        }
-        const moviesText = await moviesResponse.text();
-        parseItemData(moviesText);
-        
-        // Load and parse rating data
-        const ratingsResponse = await fetch('u.data');
-        if (!ratingsResponse.ok) {
-            throw new Error('Failed to load rating data');
-        }
-        const ratingsText = await ratingsResponse.text();
-        parseRatingData(ratingsText);
-        
-        console.log(`Loaded ${movies.length} movies and ${ratings.length} ratings`);
-    } catch (error) {
-        console.error('Error loading data:', error);
-        document.getElementById('result').textContent = 
-            'Error loading data. Please check if u.item and u.data files are available.';
-        throw error;
+  const statusEl = document.getElementById("result");
+  try {
+    if (statusEl) statusEl.textContent = "Loading data files…";
+
+    // Fetch and parse u.item first
+    const itemResp = await fetch("u.item");
+    if (!itemResp.ok) throw new Error(`Failed to load u.item (${itemResp.status})`);
+    const itemText = await itemResp.text();
+    parseItemData(itemText);
+
+    // Then fetch and parse u.data
+    const dataResp = await fetch("u.data");
+    if (!dataResp.ok) throw new Error(`Failed to load u.data (${dataResp.status})`);
+    const dataText = await dataResp.text();
+    parseRatingData(dataText);
+
+    if (statusEl) statusEl.textContent = "Data loaded. Please select a movie.";
+  } catch (err) {
+    console.error(err);
+    if (statusEl) {
+      statusEl.textContent = `Error loading data: ${err.message}`;
     }
+  }
 }
 
 /**
- * Parse movie data from u.item file
- * @param {string} text - Raw text data from u.item
+ * Parse u.item content.
+ * Each line is pipe-delimited. The last 19 fields are genre flags:
+ * [unknown, Action, Adventure, ..., Western].
+ * The specification asks to define the 18 genre names from "Action" to "Western"
+ * and build the movie's genres array where the flag is '1', skipping 'unknown'.
  */
 function parseItemData(text) {
-    const lines = text.split('\n').filter(line => line.trim() !== '');
-    
-    movies = lines.map(line => {
-        const parts = line.split('|');
-        if (parts.length < 5) return null;
-        
-        const movieId = parseInt(parts[0]);
-        const title = parts[1];
-        
-        // Extract genre information (binary flags for 18 genres)
-        const genres = [];
-        for (let i = 0; i < 18; i++) {
-            const genreIndex = 5 + i;
-            if (parts.length > genreIndex && parts[genreIndex] === '1') {
-                genres.push(genreNames[i]);
-            }
-        }
-        
-        return {
-            id: movieId,
-            title: title,
-            genres: genres
-        };
-    }).filter(movie => movie !== null);
+  // 18 named genres, skipping "unknown"
+  const GENRES = [
+    "Action", "Adventure", "Animation", "Children's", "Comedy", "Crime",
+    "Documentary", "Drama", "Fantasy", "Film-Noir", "Horror", "Musical",
+    "Mystery", "Romance", "Sci-Fi", "Thriller", "War", "Western"
+  ];
+
+  movies = []; // reset if reloaded
+  const lines = text.split("\n");
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    const parts = line.split("|");
+    if (parts.length < 6) continue; // malformed
+
+    const id = Number(parts[0]);
+    const title = parts[1];
+
+    // The last 19 fields are the genre flags (unknown + 18 named)
+    const flags = parts.slice(-19);
+    if (flags.length !== 19) continue;
+
+    // Skip index 0 (unknown). Map indices 1..18 to the 18 names above.
+    const genres = [];
+    for (let i = 1; i < flags.length; i++) {
+      if (flags[i] === "1") {
+        const genreName = GENRES[i - 1];
+        if (genreName) genres.push(genreName);
+      }
+    }
+
+    movies.push({ id, title, genres });
+  }
 }
 
 /**
- * Parse rating data from u.data file
- * @param {string} text - Raw text data from u.data
+ * Parse u.data content.
+ * Each line is tab-delimited: userId \t itemId \t rating \t timestamp
  */
 function parseRatingData(text) {
-    const lines = text.split('\n').filter(line => line.trim() !== '');
-    
-    ratings = lines.map(line => {
-        const parts = line.split('\t');
-        if (parts.length < 4) return null;
-        
-        return {
-            userId: parseInt(parts[0]),
-            itemId: parseInt(parts[1]),
-            rating: parseInt(parts[2]),
-            timestamp: parseInt(parts[3])
-        };
-    }).filter(rating => rating !== null);
+  ratings = []; // reset if reloaded
+  const lines = text.split("\n");
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    const parts = line.split("\t");
+    if (parts.length < 4) continue;
+
+    const userId = Number(parts[0]);
+    const itemId = Number(parts[1]);
+    const rating = Number(parts[2]);
+    const timestamp = Number(parts[3]);
+
+    ratings.push({ userId, itemId, rating, timestamp });
+  }
 }
