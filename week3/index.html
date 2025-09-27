@@ -17,11 +17,10 @@
     <details class="exp">
       <summary><strong>Read the explanation first (why this is correct & how to review)</strong></summary>
       <ol>
-        <li><strong>Representation:</strong> Each user/movie has a latent vector. Similar ones are close.</li>
-        <li><strong>Model:</strong> Prediction = dot(user, movie) + user bias + movie bias.</li>
-        <li><strong>Training:</strong> Minimize MSE with Adam (lr=0.001), shuffled mini-batches, with validation.</li>
-        <li><strong>ID mapping:</strong> We remap raw IDs to contiguous indices required by embeddings.</li>
-        <li><strong>Risks:</strong> Cold users/items lack embeddings; ratings are 1–5 (we clamp only for display).</li>
+        <li><strong>Model:</strong> ŷ = dot(userVec, movieVec) + userBias + movieBias (linear output).</li>
+        <li><strong>Training:</strong> MSE loss, Adam(0.001), shuffled mini-batches, validation split.</li>
+        <li><strong>ID mapping:</strong> raw IDs → contiguous indices required by embeddings.</li>
+        <li><strong>Limits:</strong> cold users/items have no embeddings; ratings are 1–5 (we clamp for display).</li>
       </ol>
     </details>
 
@@ -43,8 +42,16 @@
       <button id="predict-btn" onclick="predictRating()">Predict Rating</button>
     </section>
 
+    <!-- NEW: toggle to show only movies this user rated -->
+    <label class="toggle">
+      <input id="rated-only" type="checkbox" />
+      <span>Show only movies this user rated (adds ★actual in titles)</span>
+    </label>
+
     <section id="result-box">
       <p id="result" class="muted">Loading data…</p>
+      <!-- NEW: persistent metrics line -->
+      <p id="metrics" class="muted" style="margin-top:6px;"></p>
     </section>
 
     <details class="exp">
@@ -53,7 +60,7 @@
         <li>Dropdowns empty ⇒ <code>u.item</code>/<code>u.data</code> not in this folder.</li>
         <li>“pair not found” ⇒ selected user/movie not present in <code>u.data</code>.</li>
         <li>Loss stuck ⇒ lower LR (0.0005), verify id mapping, raise epochs.</li>
-        <li>Ratings odd ⇒ remember regression is unconstrained; we show raw + clamped 1–5.</li>
+        <li>Ratings odd ⇒ regression is unconstrained; we show raw + clamped 1–5.</li>
       </ul>
     </details>
   </main>
