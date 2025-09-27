@@ -17,18 +17,11 @@
     <details class="exp">
       <summary><strong>Read the explanation first (why this is correct & how to review)</strong></summary>
       <ol>
-        <li><strong>Representation:</strong> Each user and each movie is mapped to a small dense vector (latent factors).
-            Similar users/movies land close in this latent space.</li>
-        <li><strong>Model:</strong> Prediction is a <code>dot(userVector, movieVector)</code> plus optional user/movie bias.
-            This equals the standard MF objective taught in class.</li>
-        <li><strong>Training:</strong> Minimize MSE between known ratings and predicted ratings with Adam optimizer (lr=0.001).
-            We shuffle, use mini-batches, and keep a validation split to watch overfitting.</li>
-        <li><strong>ID mapping:</strong> Embeddings require indices 0..U-1 and 0..I-1, so we remap raw IDs to contiguous indices (crucial correctness point).</li>
-        <li><strong>Assumptions / Risks:</strong> Ratings are 1–5; we do not clamp during training (to keep gradients clean). We clamp in the UI for display.
-            Cold movies/users (with no ratings) can’t be embedded—UI warns you. Latent size too small ⇒ underfit; too big ⇒ overfit/slow.</li>
-        <li><strong>How to review without reading all code:</strong> Confirm comments match the MF math:
-          inputs → embedding lookup → flatten → dot → add biases → MSE training. Confirm we build contiguous indices and feed the same to predict.
-        </li>
+        <li><strong>Representation:</strong> Each user/movie has a latent vector. Similar ones are close.</li>
+        <li><strong>Model:</strong> Prediction = dot(user, movie) + user bias + movie bias.</li>
+        <li><strong>Training:</strong> Minimize MSE with Adam (lr=0.001), shuffled mini-batches, with validation.</li>
+        <li><strong>ID mapping:</strong> We remap raw IDs to contiguous indices required by embeddings.</li>
+        <li><strong>Risks:</strong> Cold users/items lack embeddings; ratings are 1–5 (we clamp only for display).</li>
       </ol>
     </details>
 
@@ -57,15 +50,15 @@
     <details class="exp">
       <summary><strong>What can be wrong & how to test fast</strong></summary>
       <ul>
-        <li><em>Dropdowns empty</em>: your <code>u.item</code> / <code>u.data</code> are not in this folder.</li>
-        <li><em>Prediction says “pair not found”</em>: the selected movie wasn’t in <code>u.data</code> or the user/movie got filtered out.</li>
-        <li><em>Loss doesn’t move</em>: try smaller learning rate (0.0005) or fewer/larger embeddings; verify indices mapping.</li>
-        <li><em>Ratings look too high/low</em>: this is raw regression; we display a clamped 1..5 number and the raw score for transparency.</li>
+        <li>Dropdowns empty ⇒ <code>u.item</code>/<code>u.data</code> not in this folder.</li>
+        <li>“pair not found” ⇒ selected user/movie not present in <code>u.data</code>.</li>
+        <li>Loss stuck ⇒ lower LR (0.0005), verify id mapping, raise epochs.</li>
+        <li>Ratings odd ⇒ remember regression is unconstrained; we show raw + clamped 1–5.</li>
       </ul>
     </details>
   </main>
 
-  <!-- Order matters: TF.js first, then our modules -->
+  <!-- Order matters -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
   <script src="data.js"></script>
   <script src="script.js"></script>
