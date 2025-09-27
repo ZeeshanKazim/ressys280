@@ -49,12 +49,12 @@ function parseItemData(text) {
 
     const tail = parts.slice(5);
     const is19 = tail.length >= 19;
-    const flags = is19 ? tail.slice(0,19) : tail.slice(0,18);
+    theFlags = is19 ? tail.slice(0,19) : tail.slice(0,18);
     const names = is19 ? genres19 : genres18;
 
     const genres = [];
-    for (let i = 0; i < flags.length; i++) {
-      if (flags[i] === '1') {
+    for (let i = 0; i < theFlags.length; i++) {
+      if (theFlags[i] === '1') {
         const g = names[i];
         if (g && g !== 'Unknown') genres.push(g);
       }
