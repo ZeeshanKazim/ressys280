@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Matrix Factorization Movie Recommender (TensorFlow.js)</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="container">
+    <h1>Matrix Factorization Movie Recommender</h1>
+    <p class="muted">
+      Trains a Matrix Factorization model (user/item embeddings + dot product) entirely in your browser with TensorFlow.js.
+      Then predicts a rating for a selected <em>User × Movie</em>.
+    </p>
+
+    <details class="exp">
+      <summary><strong>Read the explanation first (why this is correct & how to review)</strong></summary>
+      <ol>
+        <li><strong>Representation:</strong> Each user and each movie is mapped to a small dense vector (latent factors).
+            Similar users/movies land close in this latent space.</li>
+        <li><strong>Model:</strong> Prediction is a <code>dot(userVector, movieVector)</code> plus optional user/movie bias.
+            This equals the standard MF objective taught in class.</li>
+        <li><strong>Training:</strong> Minimize MSE between known ratings and predicted ratings with Adam optimizer (lr=0.001).
+            We shuffle, use mini-batches, and keep a validation split to watch overfitting.</li>
+        <li><strong>ID mapping:</strong> Embeddings require indices 0..U-1 and 0..I-1, so we remap raw IDs to contiguous indices (crucial correctness point).</li>
+        <li><strong>Assumptions / Risks:</strong> Ratings are 1–5; we do not clamp during training (to keep gradients clean). We clamp in the UI for display.
+            Cold movies/users (with no ratings) can’t be embedded—UI warns you. Latent size too small ⇒ underfit; too big ⇒ overfit/slow.</li>
+        <li><strong>How to review without reading all code:</strong> Confirm comments match the MF math:
+          inputs → embedding lookup → flatten → dot → add biases → MSE training. Confirm we build contiguous indices and feed the same to predict.
+        </li>
+      </ol>
+    </details>
+
+    <section class="controls">
+      <div class="control">
+        <label for="user-select">Select User</label>
+        <select id="user-select">
+          <option value="">— choose a user —</option>
+        </select>
+      </div>
+
+      <div class="control">
+        <label for="movie-select">Select Movie</label>
+        <select id="movie-select">
+          <option value="">— choose a movie —</option>
+        </select>
+      </div>
+
+      <button id="predict-btn" onclick="predictRating()">Predict Rating</button>
+    </section>
+
+    <section id="result-box">
+      <p id="result" class="muted">Loading data…</p>
+    </section>
+
+    <details class="exp">
+      <summary><strong>What can be wrong & how to test fast</strong></summary>
+      <ul>
+        <li><em>Dropdowns empty</em>: your <code>u.item</code> / <code>u.data</code> are not in this folder.</li>
+        <li><em>Prediction says “pair not found”</em>: the selected movie wasn’t in <code>u.data</code> or the user/movie got filtered out.</li>
+        <li><em>Loss doesn’t move</em>: try smaller learning rate (0.0005) or fewer/larger embeddings; verify indices mapping.</li>
+        <li><em>Ratings look too high/low</em>: this is raw regression; we display a clamped 1..5 number and the raw score for transparency.</li>
+      </ul>
+    </details>
+  </main>
+
+  <!-- Order matters: TF.js first, then our modules -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+  <script src="data.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
