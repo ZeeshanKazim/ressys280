@@ -1,5 +1,5 @@
 /* script.js — Matrix Factorization with TensorFlow.js
-   Prediction: dot(userVec, itemVec) + userBias + itemBias  (linear)
+   ŷ = dot(userVec, itemVec) + userBias + itemBias  (linear)
 */
 
 let model; // trained tf.Model
@@ -10,6 +10,9 @@ let indexToUserId = [];
 let indexToItemId = [];
 
 let trainUserTensor, trainItemTensor, trainRatingTensor;
+
+// Map userId -> Map(itemId -> rating) for fast ground-truth lookup & filtering
+const ratingsByUser = new Map();
 
 const $ = (id) => document.getElementById(id);
 
@@ -24,10 +27,20 @@ function buildIndexMaps() {
   itemIdToIndex = new Map(itemIds.map((i, idx) => [i, idx]));
 }
 
+function buildRatingsByUser() {
+  ratingsByUser.clear();
+  for (const r of ratings) {
+    if (!ratingsByUser.has(r.userId)) ratingsByUser.set(r.userId, new Map());
+    ratingsByUser.get(r.userId).set(r.itemId, r.rating);
+  }
+}
+
 function populateDropdowns() {
   const userSel = $('user-select');
+  const byTitle = [...movies].sort((a,b)=> a.title.localeCompare(b.title));
   const movieSel = $('movie-select');
 
+  // Users
   for (const u of indexToUserId) {
     const opt = document.createElement('option');
     opt.value = String(u);
@@ -35,11 +48,51 @@ function populateDropdowns() {
     userSel.appendChild(opt);
   }
 
-  const byTitle = [...movies].sort((a,b)=> a.title.localeCompare(b.title));
+  // Movies (initially: all)
   for (const m of byTitle) {
     const opt = document.createElement('option');
     opt.value = String(m.id);
     opt.textContent = m.title;
+    movieSel.appendChild(opt);
+  }
+}
+
+/** Repopulate movies after user/toggle change. If rated-only is on,
+ *  show only titles this user rated, adding ★actual in labels. */
+function repopulateMoviesForUser() {
+  const userIdRaw = parseInt($('user-select').value, 10);
+  const ratedOnly = $('rated-only').checked;
+  const movieSel  = $('movie-select');
+
+  // clear all but the placeholder
+  while (movieSel.options.length > 1) movieSel.remove(1);
+
+  let list = movies;
+
+  if (!Number.isNaN(userIdRaw) && ratedOnly) {
+    const m = ratingsByUser.get(userIdRaw);
+    if (m) {
+      list = movies
+        .filter(x => m.has(x.id))
+        .map(x => ({ ...x, __rating: m.get(x.id) }));
+    } else {
+      list = [];
+    }
+  }
+
+  const byTitle = [...list].sort((a,b)=> a.title.localeCompare(b.title));
+  if (byTitle.length === 0) {
+    const opt = document.createElement('option');
+    opt.disabled = true;
+    opt.textContent = '— no rated movies for this user —';
+    movieSel.appendChild(opt);
+    return;
+  }
+
+  for (const m of byTitle) {
+    const opt = document.createElement('option');
+    opt.value = String(m.id);
+    opt.textContent = (m.__rating != null) ? `${m.title} (★${m.__rating})` : m.title;
     movieSel.appendChild(opt);
   }
 }
@@ -95,9 +148,10 @@ function createModel(numUsers, numMovies, latentDim = 16) {
   return tf.model({ inputs: [userInput, movieInput], outputs: pred, name: 'mfRecommender' });
 }
 
-/* ---------- Train (updated) ---------- */
+/* ---------- Train (with persistent metrics line) ---------- */
 async function trainModel() {
   const res = $('result');
+  const metricsEl = $('metrics');
   res.textContent = 'Building model…';
 
   buildIndexMaps();
@@ -129,29 +183,25 @@ async function trainModel() {
     }
   );
 
-  // Compute final validation RMSE and a global-mean baseline RMSE
+  // Compute persistent metrics
   const lastValMSE = history.history.val_loss?.at(-1);
   const valRMSE = lastValMSE ? Math.sqrt(lastValMSE) : null;
 
-  // mean rating (scalar)
   const meanTensor = trainRatingTensor.mean();
   const mean = meanTensor.dataSync()[0];
   meanTensor.dispose();
 
-  // baseline RMSE = RMSE(y, mean(y))
-  const mseTensor = tf.tidy(() =>
-    trainRatingTensor.sub(tf.scalar(mean)).square().mean()
-  );
+  const mseTensor = tf.tidy(() => trainRatingTensor.sub(tf.scalar(mean)).square().mean());
   const baselineRMSE = Math.sqrt(mseTensor.dataSync()[0]);
   mseTensor.dispose();
 
-  res.textContent =
-    `Model trained. Val RMSE: ${valRMSE ? valRMSE.toFixed(4) : 'n/a'} ` +
-    `(baseline RMSE: ${baselineRMSE.toFixed(4)}). ` +
-    `Select a user and a movie, then click “Predict Rating”.`;
+  // Update UI
+  metricsEl.textContent =
+    `Val RMSE: ${valRMSE ? valRMSE.toFixed(4) : 'n/a'}  •  Baseline RMSE: ${baselineRMSE.toFixed(4)}`;
+  res.textContent = 'Model trained. Select a user and a movie, then click “Predict Rating”.';
 }
 
-/* ---------- Predict (updated) ---------- */
+/* ---------- Predict ---------- */
 async function predictRating() {
   const res = $('result');
   if (!model) { res.textContent = 'Model not ready yet. Wait for training to finish.'; return; }
@@ -179,8 +229,7 @@ async function predictRating() {
   const title = movies.find(m => m.id === itemIdRaw)?.title || `Movie ${itemIdRaw}`;
   const clamped = Math.max(1, Math.min(5, predVal));
 
-  // show actual rating if present
-  const actual = ratings.find(r => r.userId === userIdRaw && r.itemId === itemIdRaw)?.rating;
+  const actual = ratingsByUser.get(userIdRaw)?.get(itemIdRaw);
   const actualTxt = (actual != null) ? ` • actual: ${actual}` : ' • (no ground-truth rating for this pair)';
 
   res.textContent =
@@ -194,11 +243,18 @@ window.onload = async () => {
   try {
     await loadData();
     res.textContent = `Data loaded: ${numUsers} users, ${numMovies} movies, ${ratings.length} ratings. Preparing…`;
+
+    buildRatingsByUser();
     buildIndexMaps();
     populateDropdowns();
+
+    // Wire up the new toggle & user change to repopulate the movie list
+    $('user-select').addEventListener('change', repopulateMoviesForUser);
+    $('rated-only').addEventListener('change', repopulateMoviesForUser);
+
     await trainModel();
   } catch (e) {
     console.error(e);
-    // loadData already set a friendly error
+    // loadData already sets a friendly error
   }
 };
