@@ -195,13 +195,12 @@ async function trainModel() {
   const baselineRMSE = Math.sqrt(mseTensor.dataSync()[0]);
   mseTensor.dispose();
 
-  // Update UI
   metricsEl.textContent =
     `Val RMSE: ${valRMSE ? valRMSE.toFixed(4) : 'n/a'}  •  Baseline RMSE: ${baselineRMSE.toFixed(4)}`;
   res.textContent = 'Model trained. Select a user and a movie, then click “Predict Rating”.';
 }
 
-/* ---------- Predict ---------- */
+/* ---------- Predict (shows • actual: <rating> when available) ---------- */
 async function predictRating() {
   const res = $('result');
   if (!model) { res.textContent = 'Model not ready yet. Wait for training to finish.'; return; }
@@ -248,7 +247,7 @@ window.onload = async () => {
     buildIndexMaps();
     populateDropdowns();
 
-    // Wire up the new toggle & user change to repopulate the movie list
+    // Wire up the filter so you can see ★actual options
     $('user-select').addEventListener('change', repopulateMoviesForUser);
     $('rated-only').addEventListener('change', repopulateMoviesForUser);
 
