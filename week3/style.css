@@ -55,6 +55,16 @@ button#predict-btn {
 button#predict-btn:hover { filter: brightness(0.96); }
 button#predict-btn:active { transform: translateY(1px); }
 
+/* Toggle label */
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 0 2px;
+  color: #475569;
+}
+.toggle input { transform: translateY(1px); }
+
 #result-box {
   margin-top: 12px;
   border: 1px solid #e7ecf2;
