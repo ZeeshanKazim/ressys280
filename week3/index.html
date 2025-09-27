@@ -42,7 +42,7 @@
       <button id="predict-btn" onclick="predictRating()">Predict Rating</button>
     </section>
 
-    <!-- NEW: toggle to show only movies this user rated -->
+    <!-- Toggle to see only movies the chosen user actually rated -->
     <label class="toggle">
       <input id="rated-only" type="checkbox" />
       <span>Show only movies this user rated (adds ★actual in titles)</span>
@@ -50,18 +50,18 @@
 
     <section id="result-box">
       <p id="result" class="muted">Loading data…</p>
-      <!-- NEW: persistent metrics line -->
+      <!-- persistent metrics line after training -->
       <p id="metrics" class="muted" style="margin-top:6px;"></p>
     </section>
 
     <details class="exp">
-      <summary><strong>What can be wrong & how to test fast</strong></summary>
-      <ul>
-        <li>Dropdowns empty ⇒ <code>u.item</code>/<code>u.data</code> not in this folder.</li>
-        <li>“pair not found” ⇒ selected user/movie not present in <code>u.data</code>.</li>
-        <li>Loss stuck ⇒ lower LR (0.0005), verify id mapping, raise epochs.</li>
-        <li>Ratings odd ⇒ regression is unconstrained; we show raw + clamped 1–5.</li>
-      </ul>
+      <summary><strong>How to see “actual” in your result line</strong></summary>
+      <ol>
+        <li>Pick a user.</li>
+        <li>Tick <em>“Show only movies this user rated.”</em></li>
+        <li>Choose one of the starred options (e.g., <code>Toy Story (★5)</code>).</li>
+        <li>Click <b>Predict</b> → the result will include <code>• actual: &lt;rating&gt;</code>.</li>
+      </ol>
     </details>
   </main>
 
