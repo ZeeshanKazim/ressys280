@@ -1,4 +1,3 @@
-<!-- index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -31,37 +30,27 @@
     .tip{font-size:12px; color:var(--muted)}
     .row{display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-top:10px}
 
-    .controls{
-      background:var(--panel2); border:1px solid #1f2b3f; border-radius:var(--br); padding:12px; margin-bottom:12px;
-    }
+    .controls{background:var(--panel2); border:1px solid #1f2b3f; border-radius:var(--br); padding:12px; margin-bottom:12px;}
     label.small{font-size:12px; color:var(--muted); display:block; margin-bottom:2px}
-    input[type=number], select{
-      padding:6px 8px; border-radius:8px; border:1px solid #294059; background:#0c1424; color:var(--text)
-    }
+    input[type=number], select{padding:6px 8px; border-radius:8px; border:1px solid #294059; background:#0c1424; color:var(--text)}
     input[type=number]{width:90px}
-    button{
-      padding:10px 14px; border:0; border-radius:10px; background:linear-gradient(180deg, var(--accent), #b20710);
-      color:#fff; font-weight:700; cursor:pointer; box-shadow:0 10px 24px rgba(229,9,20,.25);
-    }
+    button{padding:10px 14px; border:0; border-radius:10px; background:linear-gradient(180deg, var(--accent), #b20710);
+      color:#fff; font-weight:700; cursor:pointer; box-shadow:0 10px 24px rgba(229,9,20,.25);}
     button.secondary{background:#1b2a44; box-shadow:none}
     #status{white-space:pre-line; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace}
 
     .cards{display:grid; grid-template-columns: 1fr 1fr; gap:12px}
-    .card{
-      background:var(--panel); border:1px solid #1f2b3f; border-radius:var(--br); padding:12px;
-    }
+    .card{background:var(--panel); border:1px solid #1f2b3f; border-radius:var(--br); padding:12px;}
     canvas{width:100%; height:320px; background:#0c1424; border:1px solid #1f2b3f; border-radius:10px}
+
+    .legend{display:flex; gap:14px; align-items:center; font:12px ui-monospace, monospace; color:var(--muted); margin:6px 0 0}
+    .dot{width:10px; height:10px; border-radius:50%}
+    .dot.red{background:var(--accent)} .dot.green{background:var(--ok)}
 
     .three-col{display:grid; grid-template-columns: 1fr 1fr 1fr; gap:14px}
     table{width:100%; border-collapse:collapse; font-size:14px}
     th,td{padding:8px 10px; border-bottom:1px solid #21324a}
     th{text-align:left; color:#cfe0f6}
-
-    .legend{display:flex; gap:14px; align-items:center; font:12px ui-monospace, monospace; color:var(--muted); margin:6px 0 0}
-    .dot{width:10px; height:10px; border-radius:50%}
-    .dot.red{background:var(--accent)}
-    .dot.green{background:var(--ok)}
-
     @media (max-width:1100px){ .cards{grid-template-columns:1fr} .three-col{grid-template-columns:1fr} canvas{height:260px} }
   </style>
 </head>
@@ -71,9 +60,9 @@
       <h1>Two-Tower (Deep) Retrieval — MovieLens 100K</h1>
       <div class="muted">
         User tower (user_id → embedding → <b>MLP</b>), Item tower (item_id + genres → embedding + <b>MLP</b>), score = dot product.<br/>
-        Trains <b>baseline</b> (no hidden layer) and <b>deep</b> (1 hidden layer) and compares their losses & recommendations.
+        Trains <i>baseline</i> (no hidden layer) and <i>deep</i> (1 hidden layer) and compares losses & recommendations.
       </div>
-      <div class="tip">Place files at <code>/data/u.data</code> and <code>/data/u.item</code>. Works on GitHub Pages (static). With dim=32 &amp; 80k interactions, 5 epochs finishes in a few minutes on a laptop.</div>
+      <div class="tip">Place files at <code>/data/u.data</code> and <code>/data/u.item</code>. Works on GitHub Pages (static).</div>
     </header>
 
     <section class="controls">
@@ -122,12 +111,13 @@
 
     <section class="card" style="margin-top:12px">
       <div class="muted" style="margin-bottom:6px">Top-10 Rated vs Recommended (Baseline vs Deep)</div>
-      <div id="results" class="three-col"><!-- filled by app.js --></div>
+      <div id="results" class="three-col"></div>
     </section>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
-  <script src="app.js"></script>
-  <script src="two-tower.js"></script>
+  <!-- Load TFJS and app scripts. Use defer so DOM exists. Order matters: two-tower before app. -->
+  <script defer src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+  <script defer src="two-tower.js"></script>
+  <script defer src="app.js"></script>
 </body>
 </html>
