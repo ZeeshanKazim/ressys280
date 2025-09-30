@@ -1,123 +1,118 @@
+<!-- index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Two-Tower (Deep) Retrieval — MovieLens 100K • TensorFlow.js</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Two-Tower (Deep) Retrieval — MovieLens 100K</title>
   <style>
     :root{
-      --bg:#0b0f19; --panel:#101826; --panel2:#0f1625; --muted:#9fb0c5; --text:#e6eef7; --accent:#e50914; --ok:#3fb950;
-      --br:14px;
+      --bg:#0b1220;--panel:#111a2c;--muted:#96a2b8;--text:#e6eef7;--accent:#e50914;--ok:#3fb950;
+      --stroke:#21324a;--chip:#1a253a;
     }
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{
-      margin:0; font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
-      color:var(--text);
-      background:
-        radial-gradient(900px 400px at 20% -10%, #1d2b54 0%, transparent 60%),
-        radial-gradient(700px 350px at 120% -10%, #182038 0%, transparent 65%),
-        linear-gradient(180deg, #0b0f19 0%, #0a0e17 100%);
-      display:grid; place-items:start center; padding:18px;
-    }
-    .wrap{width:100%; max-width:1200px;}
-    header{
-      background:var(--panel); border:1px solid #1f2b3f; border-radius:var(--br); padding:18px 18px 12px; margin-bottom:12px;
-      box-shadow:0 10px 30px rgba(0,0,0,.18);
-    }
-    h1{margin:0 0 6px; font-size:22px}
-    .muted{color:var(--muted)}
-    .tip{font-size:12px; color:var(--muted)}
-    .row{display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-top:10px}
-
-    .controls{background:var(--panel2); border:1px solid #1f2b3f; border-radius:var(--br); padding:12px; margin-bottom:12px;}
-    label.small{font-size:12px; color:var(--muted); display:block; margin-bottom:2px}
-    input[type=number], select{padding:6px 8px; border-radius:8px; border:1px solid #294059; background:#0c1424; color:var(--text)}
-    input[type=number]{width:90px}
-    button{padding:10px 14px; border:0; border-radius:10px; background:linear-gradient(180deg, var(--accent), #b20710);
-      color:#fff; font-weight:700; cursor:pointer; box-shadow:0 10px 24px rgba(229,9,20,.25);}
-    button.secondary{background:#1b2a44; box-shadow:none}
-    #status{white-space:pre-line; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace}
-
-    .cards{display:grid; grid-template-columns: 1fr 1fr; gap:12px}
-    .card{background:var(--panel); border:1px solid #1f2b3f; border-radius:var(--br); padding:12px;}
-    canvas{width:100%; height:320px; background:#0c1424; border:1px solid #1f2b3f; border-radius:10px}
-
-    .legend{display:flex; gap:14px; align-items:center; font:12px ui-monospace, monospace; color:var(--muted); margin:6px 0 0}
-    .dot{width:10px; height:10px; border-radius:50%}
-    .dot.red{background:var(--accent)} .dot.green{background:var(--ok)}
-
-    .three-col{display:grid; grid-template-columns: 1fr 1fr 1fr; gap:14px}
-    table{width:100%; border-collapse:collapse; font-size:14px}
-    th,td{padding:8px 10px; border-bottom:1px solid #21324a}
-    th{text-align:left; color:#cfe0f6}
-    @media (max-width:1100px){ .cards{grid-template-columns:1fr} .three-col{grid-template-columns:1fr} canvas{height:260px} }
+    html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font:14px/1.45 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Inter,"Helvetica Neue",Arial;}
+    .wrap{max-width:1200px;margin:18px auto;padding:0 16px;}
+    h1{font-weight:800;letter-spacing:.2px;margin:0 0 8px}
+    .sub{color:var(--muted);margin:0 0 10px}
+    .panel{background:var(--panel);border:1px solid var(--stroke);border-radius:10px;padding:14px;margin:10px 0 12px}
+    .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+    .chip{background:var(--chip);border:1px solid var(--stroke);padding:8px 10px;border-radius:8px}
+    label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+    input,select{background:#0e1729;color:var(--text);border:1px solid var(--stroke);border-radius:8px;padding:8px 10px;min-width:84px}
+    button{border:0;border-radius:10px;padding:10px 16px;font-weight:700;cursor:pointer}
+    .danger{background:var(--accent);color:#fff;box-shadow:0 0 0 0 rgba(229,9,20,.5)}
+    .secondary{opacity:.65}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    canvas{width:100%;height:260px;border:1px solid var(--stroke);border-radius:10px;background:#0c1424}
+    #status{margin-left:10px;color:var(--muted)}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:8px;border-bottom:1px dashed var(--stroke);text-align:left}
+    th{color:var(--muted);font-weight:600}
+    .legend{display:flex;gap:14px;align-items:center;margin:6px 0 0}
+    .dot{width:10px;height:10px;border-radius:50%}
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <h1>Two-Tower (Deep) Retrieval — MovieLens 100K</h1>
-      <div class="muted">
-        User tower (user_id → embedding → <b>MLP</b>), Item tower (item_id + genres → embedding + <b>MLP</b>), score = dot product.<br/>
-        Trains <i>baseline</i> (no hidden layer) and <i>deep</i> (1 hidden layer) and compares losses & recommendations.
-      </div>
-      <div class="tip">Place files at <code>/data/u.data</code> and <code>/data/u.item</code>. Works on GitHub Pages (static).</div>
-    </header>
+  <main class="wrap">
+    <h1>Two-Tower (Deep) Retrieval — MovieLens 100K</h1>
+    <p class="sub">
+      User tower (user_id → embedding → <b>MLP</b>), Item tower (item_id + genres → embedding + <b>MLP</b>), score = dot product.<br/>
+      Trains <b>baseline</b> (no hidden layer) and <b>deep</b> (1 hidden layer) and compares their losses & recommendations.<br/>
+      Place files at <code>./u.data</code> and <code>./u.item</code>. Works on GitHub Pages (static).
+    </p>
 
-    <section class="controls">
+    <section class="panel">
       <div class="row">
-        <div><label class="small">Max interactions</label><input id="cfg-max" type="number" value="80000" min="10000" step="5000"></div>
-        <div><label class="small">Embedding dim</label><input id="cfg-dim" type="number" value="32" min="8" max="128" step="8"></div>
-        <div><label class="small">Hidden dim (deep)</label><input id="cfg-hid" type="number" value="64" min="16" max="256" step="16"></div>
-        <div><label class="small">Batch size</label><input id="cfg-batch" type="number" value="256" min="64" max="2048" step="64"></div>
-        <div><label class="small">Epochs</label><input id="cfg-epochs" type="number" value="5" min="1" max="20"></div>
-        <div><label class="small">Learning rate</label><input id="cfg-lr" type="number" value="0.003" min="0.0005" max="0.02" step="0.0005"></div>
-        <div><label class="small">Loss</label>
+        <div class="chip">
+          <label for="cfg-max">Max interactions</label>
+          <input id="cfg-max" type="number" value="80000">
+        </div>
+        <div class="chip">
+          <label for="cfg-dim">Embedding dim</label>
+          <input id="cfg-dim" type="number" value="40">
+        </div>
+        <div class="chip">
+          <label for="cfg-hid">Hidden dim (deep)</label>
+          <input id="cfg-hid" type="number" value="64">
+        </div>
+        <div class="chip">
+          <label for="cfg-batch">Batch size</label>
+          <input id="cfg-batch" type="number" value="256">
+        </div>
+        <div class="chip">
+          <label for="cfg-epochs">Epochs</label>
+          <input id="cfg-epochs" type="number" value="5">
+        </div>
+        <div class="chip">
+          <label for="cfg-lr">Learning rate</label>
+          <input id="cfg-lr" type="number" step="0.001" value="0.003">
+        </div>
+        <div class="chip">
+          <label for="cfg-loss">Loss</label>
           <select id="cfg-loss">
             <option value="softmax" selected>In-batch softmax</option>
             <option value="bpr">BPR pairwise</option>
           </select>
         </div>
-        <div><label class="small">Train baseline too?</label>
+        <div class="chip">
+          <label for="cfg-both">Train baseline too?</label>
           <select id="cfg-both">
             <option value="yes" selected>Yes (compare)</option>
             <option value="no">No (deep only)</option>
           </select>
         </div>
-      </div>
-      <div class="row" style="margin-top:8px">
-        <button id="btn-load">Load Data</button>
+
+        <button id="btn-load" class="danger">Load Data</button>
         <button id="btn-train" class="secondary">Train</button>
-        <button id="btn-test" class="secondary">Test</button>
-        <div id="status" class="muted" style="margin-left:10px">Status: idle</div>
+        <button id="btn-test"  class="secondary">Test</button>
+        <span id="status">Status: idle</span>
       </div>
     </section>
 
-    <section class="cards">
-      <div class="card">
-        <div class="muted" style="margin-bottom:6px">Training loss (per batch)</div>
+    <section class="panel grid">
+      <div>
+        <h3 style="margin:4px 0 10px">Training loss (per batch)</h3>
         <canvas id="lossCanvas" width="560" height="260"></canvas>
         <div class="legend">
-          <span class="dot green"></span> Baseline (no hidden) &nbsp;&nbsp;
-          <span class="dot red"></span> Deep (1 hidden)
+          <span class="dot" style="background:#3fb950"></span><span class="sub">Baseline (no hidden)</span>
+          <span class="dot" style="background:#e50914"></span><span class="sub">Deep (1 hidden)</span>
         </div>
       </div>
-      <div class="card">
-        <div class="muted" style="margin-bottom:6px">Item embedding projection (PCA, sample)</div>
-        <canvas id="projCanvas" width="560" height="260" title="Hover to see title"></canvas>
+      <div>
+        <h3 style="margin:4px 0 10px">Item embedding projection (PCA, sample)</h3>
+        <canvas id="projCanvas" width="560" height="260"></canvas>
       </div>
     </section>
 
-    <section class="card" style="margin-top:12px">
-      <div class="muted" style="margin-bottom:6px">Top-10 Rated vs Recommended (Baseline vs Deep)</div>
-      <div id="results" class="three-col"></div>
+    <section class="panel">
+      <h3 style="margin:4px 0 10px">Top-10 Rated vs Recommended (Baseline vs Deep)</h3>
+      <div id="results"></div>
     </section>
-  </div>
+  </main>
 
-  <!-- Load TFJS and app scripts. Use defer so DOM exists. Order matters: two-tower before app. -->
-  <script defer src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
-  <script defer src="two-tower.js"></script>
-  <script defer src="app.js"></script>
+  <!-- Scripts: TFJS, then two-tower.js (models), then app.js (UI/pipeline) -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.19.0/dist/tf.min.js"></script>
+  <script src="./two-tower.js"></script>
+  <script src="./app.js"></script>
 </body>
 </html>
