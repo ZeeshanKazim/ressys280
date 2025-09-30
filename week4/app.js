@@ -1,22 +1,21 @@
-// app.js — robust wiring + clearer status for training
-
+// app.js
 (() => {
   const $ = id => document.getElementById(id);
-  const setStatus = t => { const el = $('status'); if (el) el.textContent = `Status: ${t}`; console.log('[status]', t); };
+  const setStatus = t => { $('status').textContent = `Status: ${t}`; console.log('[status]', t); };
 
   const S = {
     interactions: [],
-    items: new Map(),
+    items: new Map(),              // id -> {title, year, genres:Int8Array(18)}
     users: new Set(), itemIds: new Set(),
-    userToRated: new Map(), userTopRated: new Map(),
+    userToRated: new Map(),        // userId -> Set(itemId)
+    userTopRated: new Map(),       // userId -> [{itemId,title,year,rating,ts}]
     userId2idx: new Map(), itemId2idx: new Map(), idx2userId: [], idx2itemId: [],
-    baseline: null, deep: null, trained: { baseline:false, deep:false },
-    cfg: { max:80000, dim:32, hid:64, batch:256, epochs:5, lr:0.003, loss:'softmax', both:'yes' },
-    loss: { baseline:[], deep:[] },
-    projPoints: []
+    baseline: null, deep: null, trained: { baseline: false, deep: false },
+    cfg: { max:80000, dim:40, hid:64, batch:256, epochs:5, lr:0.003, loss:'softmax', both:'yes' },
+    loss: { baseline:[], deep:[] }, projPoints:[]
   };
 
-  // -------- tiny canvas line plot for losses --------
+  // --- tiny multi-series loss plot ---
   class MultiChart {
     constructor(canvas){ this.c=canvas; this.ctx=canvas.getContext('2d'); }
     draw(series){
@@ -24,12 +23,12 @@
       ctx.clearRect(0,0,W,H); ctx.fillStyle='#0c1424'; ctx.fillRect(0,0,W,H);
       ctx.strokeStyle='#21324a'; ctx.beginPath(); ctx.moveTo(40,10); ctx.lineTo(40,H-20); ctx.lineTo(W-10,H-20); ctx.stroke();
       const vals=Object.values(series).flat(); if(!vals.length) return;
-      const ymin=Math.min(...vals), ymax=Math.max(...vals); const maxLen=Math.max(...Object.values(series).map(a=>a.length),1);
+      const ymin=Math.min(...vals), ymax=Math.max(...vals), maxLen=Math.max(...Object.values(series).map(a=>a.length),1);
       const sx=i=>50+(i/(maxLen-1))*(W-64), sy=v=>(H-24)-((v-ymin)/Math.max(1e-9,ymax-ymin))*(H-34);
       const col={baseline:'#3fb950', deep:'#e50914'};
-      for(const [k,arr] of Object.entries(series)){ if(!arr.length) continue; const c=col[k]||'#6ea8fe';
-        this.ctx.strokeStyle=c; this.ctx.lineWidth=2; this.ctx.beginPath();
-        arr.forEach((v,i)=>{ const X=sx(i), Y=sy(v); i?this.ctx.lineTo(X,Y):this.ctx.moveTo(X,Y); }); this.ctx.stroke();
+      for(const [k,arr] of Object.entries(series)){ if(!arr.length) continue; const c=col[k]||'#88c';
+        ctx.strokeStyle=c; ctx.lineWidth=2; ctx.beginPath();
+        arr.forEach((v,i)=>{ const X=sx(i), Y=sy(v); i?ctx.lineTo(X,Y):ctx.moveTo(X,Y); }); ctx.stroke();
       }
       ctx.fillStyle='#9fb0c5'; ctx.font='12px ui-monospace,monospace';
       ctx.fillText(ymax.toFixed(3),6,sy(ymax)); ctx.fillText(ymin.toFixed(3),6,sy(ymin));
@@ -39,7 +38,7 @@
 
   function readCfg(){
     S.cfg.max   = Math.max(1000, +$('cfg-max').value || 80000);
-    S.cfg.dim   = Math.max(8,    +$('cfg-dim').value || 32);
+    S.cfg.dim   = Math.max(8,    +$('cfg-dim').value || 40);
     S.cfg.hid   = Math.max(16,   +$('cfg-hid').value || 64);
     S.cfg.batch = Math.max(32,   +$('cfg-batch').value || 256);
     S.cfg.epochs= Math.max(1,    +$('cfg-epochs').value || 5);
@@ -48,75 +47,64 @@
     S.cfg.both  = $('cfg-both').value === 'no' ? 'no' : 'yes';
   }
 
-  // -------- data loading --------
+  // ---------- data loading ----------
   async function loadData(){
-    setStatus('initializing TensorFlow.js…');
-    try {
-      await tf.ready();
-      // Prefer webgl if available; otherwise fall back to wasm/cpu gracefully
-      const backends = tf.engine().registryFactory ? Object.keys(tf.engine().registryFactory) : ['webgl','wasm','cpu'];
-      if (backends.includes('webgl')) await tf.setBackend('webgl');
-      else if (backends.includes('wasm')) await tf.setBackend('wasm');
-      await tf.ready();
-      console.log('TFJS backend:', tf.getBackend());
-    } catch (e) {
-      console.warn('Could not switch backend:', e);
-    }
-
-    setStatus('loading data…');
-    let itemTxt, dataTxt;
+    await tf.ready();
     try{
       const [r1,r2] = await Promise.all([fetch('./u.item'), fetch('./u.data')]);
-      if(!r1.ok) throw new Error('missing ./u.item');
-      if(!r2.ok) throw new Error('missing ./u.data');
-      itemTxt = await r1.text(); dataTxt = await r2.text();
+      if(!r1.ok || !r2.ok) throw new Error('missing dataset files');
+      const itemTxt = await r1.text();
+      const dataTxt = await r2.text();
+
+      S.items.clear(); S.itemIds.clear();
+      for (const line of itemTxt.split('\n').filter(Boolean)){
+        const parts=line.split('|'); if(parts.length<2) continue;
+        const id=+parts[0]; let title=parts[1]; let year=null;
+        const m=title.match(/\((\d{4})\)\s*$/); if(m){year=+m[1]; title=title.replace(/\s*\(\d{4}\)\s*$/,'');}
+        const flags=parts.slice(5).map(x=>x==='1'?1:0);
+        const use=(flags.length>=19)? flags.slice(1) : flags; // drop "Unknown"
+        const g=new Int8Array(18); for(let k=0;k<Math.min(18,use.length);k++) g[k]=use[k];
+        S.items.set(id,{title,year,genres:g}); S.itemIds.add(id);
+      }
+
+      S.interactions.length=0; S.users.clear();
+      for (const line of dataTxt.split('\n').filter(Boolean)){
+        const [u,i,r,t]=line.split('\t'); const userId=+u,itemId=+i,rating=+r,ts=+t;
+        if(Number.isFinite(userId)&&Number.isFinite(itemId)) S.interactions.push({userId,itemId,rating,ts});
+        S.users.add(userId);
+      }
+
+      // indices
+      const userIds=[...S.users].sort((a,b)=>a-b), itemIds=[...S.itemIds].sort((a,b)=>a-b);
+      S.idx2userId=userIds; S.idx2itemId=itemIds;
+      S.userId2idx=new Map(userIds.map((u,idx)=>[u,idx]));
+      S.itemId2idx=new Map(itemIds.map((i,idx)=>[i,idx]));
+
+      // rated sets & historical top-10 lists
+      S.userToRated.clear(); S.userTopRated.clear();
+      for (const {userId,itemId} of S.interactions){
+        if(!S.userToRated.has(userId)) S.userToRated.set(userId,new Set());
+        S.userToRated.get(userId).add(itemId);
+      }
+      const byUser=new Map();
+      for (const r of S.interactions){ if(!byUser.has(r.userId)) byUser.set(r.userId,[]); byUser.get(r.userId).push(r); }
+      for (const [uid,arr] of byUser){
+        arr.sort((a,b)=> (b.rating-a.rating)||(b.ts-a.ts));
+        const top = arr.slice(0,60).map(x=>({ itemId:x.itemId, rating:x.rating, ts:x.ts,
+          title:S.items.get(x.itemId)?.title ?? String(x.itemId), year:S.items.get(x.itemId)?.year ?? '' }));
+        S.userTopRated.set(uid, top);
+      }
+
+      $('btn-train').classList.remove('secondary');
+      $('btn-test').classList.remove('secondary');
+      setStatus(`data loaded — users: ${userIds.length}, items: ${itemIds.length}, interactions: ${S.interactions.length}`);
     }catch(e){
-      console.error(e); setStatus('fetch failed. Ensure ./u.item and ./u.data are in this folder.');
-      return;
+      console.error(e);
+      setStatus('fetch failed. Ensure ./u.item and ./u.data exist (case-sensitive).');
     }
-
-    S.items.clear(); S.itemIds.clear();
-    for (const line of itemTxt.split('\n').filter(Boolean)){
-      const parts=line.split('|'); if(parts.length<2) continue;
-      const id=+parts[0]; let title=parts[1]; let year=null;
-      const m=title.match(/\((\d{4})\)\s*$/); if(m){year=+m[1]; title=title.replace(/\s*\(\d{4}\)\s*$/,'');}
-      const flags=parts.slice(5).map(x=>x==='1'?1:0);
-      const use=(flags.length>=19)? flags.slice(1) : flags; // drop "Unknown"
-      const g=new Int8Array(18); for(let k=0;k<Math.min(18,use.length);k++) g[k]=use[k];
-      S.items.set(id,{title,year,genres:g}); S.itemIds.add(id);
-    }
-
-    S.interactions.length=0; S.users.clear();
-    for (const line of dataTxt.split('\n').filter(Boolean)){
-      const [u,i,r,t]=line.split('\t'); const userId=+u,itemId=+i,rating=+r,ts=+t;
-      if(Number.isFinite(userId)&&Number.isFinite(itemId)) S.interactions.push({userId,itemId,rating,ts});
-      S.users.add(userId);
-    }
-
-    S.userToRated.clear(); S.userTopRated.clear();
-    for (const {userId,itemId} of S.interactions){
-      if(!S.userToRated.has(userId)) S.userToRated.set(userId,new Set());
-      S.userToRated.get(userId).add(itemId);
-    }
-    const byUser=new Map();
-    for (const r of S.interactions){ if(!byUser.has(r.userId)) byUser.set(r.userId,[]); byUser.get(r.userId).push(r); }
-    for (const [uid,arr] of byUser){
-      arr.sort((a,b)=> (b.rating-a.rating)||(b.ts-a.ts));
-      const top = arr.slice(0,60).map(x=>({ itemId:x.itemId, rating:x.rating, ts:x.ts,
-        title:S.items.get(x.itemId)?.title ?? String(x.itemId), year:S.items.get(x.itemId)?.year ?? '' }));
-      S.userTopRated.set(uid, top);
-    }
-
-    const userIds=[...S.users].sort((a,b)=>a-b), itemIds=[...S.itemIds].sort((a,b)=>a-b);
-    S.idx2userId=userIds; S.idx2itemId=itemIds;
-    S.userId2idx=new Map(userIds.map((u,idx)=>[u,idx])); S.itemId2idx=new Map(itemIds.map((i,idx)=>[i,idx]));
-
-    $('btn-train')?.classList.remove('secondary');
-    $('btn-test')?.classList.remove('secondary');
-    setStatus(`data loaded — users: ${userIds.length}, items: ${itemIds.length}, interactions: ${S.interactions.length}`);
   }
 
-  // -------- helpers --------
+  // helpers
   function buildPairs(maxN){
     const idxs = S.interactions.map((_,i)=>i);
     for(let i=idxs.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [idxs[i],idxs[j]]=[idxs[j],idxs[i]]; }
@@ -137,21 +125,20 @@
     return tf.tensor2d(buf,[N,G],'float32');
   }
 
-  // -------- training --------
+  // training
   async function train(){
     try{
-      if (!S.interactions.length){ setStatus('load data first'); return; }
-      readCfg();
-      S.loss={baseline:[], deep:[]}; lossChart.draw(S.loss);
+      if(!S.interactions.length){ setStatus('load data first'); return; }
+      readCfg(); S.loss={baseline:[], deep:[]}; lossChart.draw(S.loss);
 
       const pairs=buildPairs(S.cfg.max);
-      if (!pairs.length){ setStatus('no training pairs (unexpected)'); return; }
+      if (!pairs.length){ setStatus('no training pairs'); return; }
 
       const U=S.idx2userId.length, I=S.idx2itemId.length;
       setStatus(`building models… (U=${U}, I=${I})`);
 
       if (S.cfg.both==='yes'){
-        if(!S.baseline) S.baseline = new TwoTowerModel(U,I,S.cfg.dim, S.cfg.loss);
+        if(!S.baseline) S.baseline = new TwoTowerModel(U,I,S.cfg.dim,S.cfg.loss);
         S.baseline.setOptimizer(tf.train.adam(S.cfg.lr));
         await trainOne(S.baseline, pairs, 'baseline');
         S.trained.baseline=true;
@@ -167,7 +154,7 @@
       setStatus('training done — ready to test');
     }catch(e){
       console.error(e);
-      setStatus('train error (see Console for stack). Try smaller batch size or fewer interactions.');
+      setStatus('train error (see console). Try smaller batch size / fewer interactions.');
     }
   }
 
@@ -179,8 +166,9 @@
         const u=new Int32Array(batch.length), it=new Int32Array(batch.length);
         for(let t=0;t<batch.length;t++){ u[t]=batch[t][0]; it[t]=batch[t][1]; }
         const L = await model.trainStep(u,it);
-        if (!Number.isFinite(L)){ throw new Error(`NaN loss at epoch ${ep+1} step ${s+1}`); }
-        series.push(L); if((s&1)===0) lossChart.draw(S.loss);
+        if (!Number.isFinite(L)) throw new Error(`NaN loss at epoch ${ep+1} step ${s+1}`);
+        series.push(L);
+        if((s&1)===0) lossChart.draw(S.loss);
         setStatus(`${key}: epoch ${ep+1}/${epochs} — step ${s+1}/${steps} — loss ${L.toFixed(4)}`);
         await tf.nextFrame();
       }
@@ -188,7 +176,7 @@
     lossChart.draw(S.loss);
   }
 
-  // -------- projection (PCA) --------
+  // embedding projection (PCA on sample)
   async function drawProjectionSample(model){
     const cvs=$('projCanvas'), ctx=cvs.getContext('2d'), W=cvs.width,H=cvs.height;
     ctx.clearRect(0,0,W,H); ctx.fillStyle='#0c1424'; ctx.fillRect(0,0,W,H);
@@ -207,8 +195,11 @@
 
     let XY;
     try{
-      XY=tf.tidy(()=>{ const X=E.sub(E.mean(0)); const svd=(tf.svd?tf.svd:tf.linalg.svd)(X,true);
-        const V2=svd.v.slice([0,0],[-1,2]); return X.matMul(V2); });
+      XY=tf.tidy(()=>{ const X=E.sub(E.mean(0));
+        const svd=(tf.svd?tf.svd:tf.linalg.svd)(X,true);
+        const V2=svd.v.slice([0,0],[-1,2]);
+        return X.matMul(V2);
+      });
     }catch{ XY=E.slice([0,0],[-1,2]); }
     const pts=await XY.array(); E.dispose(); XY.dispose();
 
@@ -225,7 +216,7 @@
     }
   }
 
-  // -------- recommendations / rendering --------
+  // test / recommendations
   async function testOnce(){
     if(!S.trained.deep && !S.trained.baseline){ setStatus('train first'); return; }
     const candidates=[]; for(const [u,arr] of S.userTopRated) if(arr.length>=20) candidates.push(u);
@@ -247,7 +238,8 @@
   }
   async function recommendWithDeep(userId,K){
     const rated=S.userToRated.get(userId)||new Set(); const uIdx=S.userId2idx.get(userId);
-    const u=S.deep.getUserEmbeddingForIndex(uIdx); const N=S.idx2itemId.length, chunk=2048, scores=new Float32Array(N);
+    const u=S.deep.getUserEmbeddingForIndex(uIdx);
+    const N=S.idx2itemId.length, chunk=2048, scores=new Float32Array(N);
     for(let s=0;s<N;s+=chunk){
       const end=Math.min(N,s+chunk), idx=tf.tensor1d([...Array(end-s).keys()].map(x=>x+s),'int32'), e=S.deep.itemForward(idx);
       const block=tf.tidy(()=> e.matMul(u.transpose()).squeeze()); const vals=await block.data(); scores.set(vals,s);
@@ -281,11 +273,11 @@
     if (right.length) root.appendChild(mk('Top-10 Recommended — Deep', right, ['#','Title','Score']));
   }
 
-  // -------- wire UI --------
+  // wiring
   window.addEventListener('DOMContentLoaded', () => {
     setStatus('idle (click “Load Data”)');
-    $('btn-load')?.addEventListener('click', () => { try{ loadData(); }catch(e){ console.error(e); setStatus('load error'); }});
-    $('btn-train')?.addEventListener('click', () => { try{ train(); }catch(e){ console.error(e); setStatus('train error'); }});
-    $('btn-test')?.addEventListener('click', () => { try{ testOnce(); }catch(e){ console.error(e); setStatus('test error'); }});
+    $('btn-load').addEventListener('click', ()=>loadData());
+    $('btn-train').addEventListener('click', ()=>train());
+    $('btn-test').addEventListener('click', ()=>testOnce());
   });
 })();
