@@ -1,88 +1,168 @@
-// two-tower.js — Baseline (emb tables) and Deep (MLP + genres) two-tower models.
+// two-tower.js
+// Minimal two-tower models in TF.js with in-batch softmax (default) or BPR loss.
 
 class TwoTowerBase {
-  constructor(lossType='softmax'){ this.lossType=lossType; this.optimizer=tf.train.adam(0.003); }
-  setOptimizer(opt){ this.optimizer=opt; }
-
-  _inBatchSoftmax(U, Ipos){ // U:[B,D], I+:[B,D] -> logits [B,B]
-    const logits = U.matMul(Ipos, false, true);
-    const B = logits.shape[0];
-    const labels = tf.oneHot(tf.range(0,B,1,'int32'), B);
-    return tf.losses.softmaxCrossEntropy(labels, logits, {fromLogits:true});
+  constructor(numUsers, numItems, embDim, lossType='softmax'){
+    this.numUsers=numUsers; this.numItems=numItems; this.embDim=embDim;
+    this.lossType=lossType;
   }
-  _bpr(U, Ipos){ // in-batch negatives: random permute positives
-    const B=U.shape[0]; const negIdx=tf.randomUniform([B],0,B,'int32'); const Ineg=tf.gather(Ipos, negIdx);
-    const sPos=tf.sum(U.mul(Ipos),-1), sNeg=tf.sum(U.mul(Ineg),-1);
-    return tf.softplus(sPos.sub(sNeg).neg()).mean();
+  setOptimizer(opt){ this.opt=opt; }
+  // --- softmax with in-batch negatives: mean(logsumexp(row) - diag(row)) ---
+  static softmaxInBatchLoss(logits){
+    // logits shape [B, B]
+    const B = logits.shape[0];
+    const max = logits.max(1, true);
+    const stab = logits.sub(max);
+    const lse = tf.log(tf.exp(stab).sum(1));                  // [B]
+    // gather diagonal
+    const idx = tf.tensor2d([...Array(B).keys()].map(i=>[i,i]), [B,2], 'int32');
+    const diag = stab.gatherND(idx);                          // [B]
+    const loss = lse.sub(diag).mean();                        // scalar
+    idx.dispose(); max.dispose(); stab.dispose(); return loss;
+  }
+  // --- BPR loss: −mean(log σ(pos − neg)) ---
+  static bprLoss(pos, neg){
+    // pos, neg shape [B]
+    const x = pos.sub(neg);
+    const loss = tf.neg(tf.log(tf.sigmoid(x)).mean());
+    return loss;
   }
 }
 
 class TwoTowerModel extends TwoTowerBase {
-  // Baseline: only ID embeddings (no hidden).
   constructor(numUsers, numItems, embDim=32, lossType='softmax'){
-    super(lossType);
-    this.numUsers=numUsers; this.numItems=numItems; this.embDim=embDim;
-    this.userEmbedding=tf.variable(tf.randomNormal([numUsers,embDim],0,0.05), true, 'userEmb');
-    this.itemEmbedding=tf.variable(tf.randomNormal([numItems,embDim],0,0.05), true, 'itemEmb');
+    super(numUsers,numItems,embDim,lossType);
+    this.userEmbedding = tf.variable(tf.randomNormal([numUsers, embDim], 0, 0.05), true, 'userEmbedding');
+    this.itemEmbedding = tf.variable(tf.randomNormal([numItems, embDim], 0, 0.05), true, 'itemEmbedding');
   }
-  userForward(userIdx){ return tf.gather(this.userEmbedding, userIdx); }
-  itemForward(itemIdx){ return tf.gather(this.itemEmbedding, itemIdx); }
-  async trainStep(uIdxArr,iIdxArr){
-    const u=tf.tensor1d(uIdxArr,'int32'), it=tf.tensor1d(iIdxArr,'int32');
-    const lossT = await this.optimizer.minimize(()=> {
-      const U=this.userForward(u), I=this.itemForward(it);
-      return (this.lossType==='bpr')? this._bpr(U,I) : this._inBatchSoftmax(U,I);
-    }, true);
-    const L=(await lossT.data())[0]; u.dispose(); it.dispose(); lossT.dispose(); return L;
+
+  userForward(userIdxTensor){  // userIdxTensor: [B] or [B,1]
+    const idx = userIdxTensor.reshape([-1]);
+    return tf.gather(this.userEmbedding, idx);
   }
-  getUserEmbeddingForIndex(uIdx){ return tf.tidy(()=> tf.gather(this.userEmbedding, tf.tensor1d([uIdx],'int32'))); } // [1,D]
-  getItemEmbedding(){ return this.itemEmbedding; }
+  itemForward(itemIdxTensor){  // itemIdxTensor: [B] or [B,1]
+    const idx = itemIdxTensor.reshape([-1]);
+    return tf.gather(this.itemEmbedding, idx);
+  }
+
+  score(uEmb, iEmb){           // dot product: [B,D]·[B,D]^T -> [B,B]
+    return uEmb.matMul(iEmb, false, true);
+  }
+
+  async trainStep(userIdxArray, itemIdxArray){
+    const uIdx = tf.tensor1d(userIdxArray, 'int32');
+    const iIdx = tf.tensor1d(itemIdxArray, 'int32');
+    const vars = [this.userEmbedding, this.itemEmbedding];
+
+    const lossScalar = await this.opt.minimize(() => tf.tidy(() => {
+      const U = this.userForward(uIdx);  // [B,D]
+      const I = this.itemForward(iIdx);  // [B,D]
+      const logits = this.score(U, I);   // [B,B]
+
+      let loss;
+      if (this.lossType === 'bpr') {
+        // sample negatives from batch (shuffle iIdx)
+        const shuffled = tf.gather(iIdx, tf.util.createShuffledIndices(iIdx.size));
+        const In = this.itemForward(shuffled);
+        const pos = U.mul(I).sum(1);      // [B]
+        const neg = U.mul(In).sum(1);     // [B]
+        loss = TwoTowerBase.bprLoss(pos, neg);
+        In.dispose(); pos.dispose(); neg.dispose();
+      } else {
+        loss = TwoTowerBase.softmaxInBatchLoss(logits);
+      }
+      return loss;
+    }), true, vars);
+
+    uIdx.dispose(); iIdx.dispose();
+    const val = (await lossScalar.data())[0];
+    lossScalar.dispose();
+    return val;
+  }
+
+  getUserEmbeddingForIndex(uIdx){ // returns [1,D]
+    return tf.tidy(() => tf.gather(this.userEmbedding, tf.tensor1d([uIdx],'int32')));
+  }
+  getItemEmbedding(){             // returns [N,D] (variable tensor)
+    return this.itemEmbedding;
+  }
 }
 
+// Deep model: user tower = Embedding -> Dense(hid) -> Dense(embDim)
+//             item tower = [Embedding, genres(18)] concat -> Dense(hid) -> Dense(embDim)
 class TwoTowerDeepModel extends TwoTowerBase {
-  // Deep towers: 1 hidden layer per side, genres on item side.
-  constructor(numUsers, numItems, embDim=32, genreDim=18, hiddenDim=64, lossType='softmax', itemGenreTensor){
-    super(lossType);
-    this.numUsers=numUsers; this.numItems=numItems; this.embDim=embDim; this.hiddenDim=hiddenDim; this.genreDim=genreDim;
+  constructor(numUsers, numItems, embDim=32, genreDim=18, hiddenDim=64, lossType='softmax', itemGenreTensor /*[numItems,18]*/){
+    super(numUsers,numItems,embDim,lossType);
+    this.userEmbedding = tf.variable(tf.randomNormal([numUsers, embDim], 0, 0.05), true, 'userEmbeddingDeep');
+    this.itemEmbedding = tf.variable(tf.randomNormal([numItems, embDim], 0, 0.05), true, 'itemEmbeddingDeep');
     this.itemGenres = itemGenreTensor || tf.zeros([numItems, genreDim]);
 
-    this.userEmbedding=tf.variable(tf.randomNormal([numUsers,embDim],0,0.05), true, 'userEmbDeep');
-    this.itemEmbedding=tf.variable(tf.randomNormal([numItems,embDim],0,0.05), true, 'itemEmbDeep');
+    // tiny MLPs
+    this.userDense1 = tf.layers.dense({units:hiddenDim, activation:'relu', useBias:true,
+      kernelInitializer:'glorotUniform', name:'userDense1'});
+    this.userOut   = tf.layers.dense({units:embDim, activation:null, useBias:true,
+      kernelInitializer:'glorotUniform', name:'userOut'});
 
-    this.Wg = tf.variable(tf.randomNormal([genreDim, embDim], 0, 0.05), true, 'Wg');
-    this.bg = tf.variable(tf.zeros([embDim]), true, 'bg');
-
-    this.Wu1=tf.variable(tf.randomNormal([embDim,hiddenDim],0,0.05), true,'Wu1'); this.bu1=tf.variable(tf.zeros([hiddenDim]), true,'bu1');
-    this.Wu2=tf.variable(tf.randomNormal([hiddenDim,embDim],0,0.05), true,'Wu2'); this.bu2=tf.variable(tf.zeros([embDim]), true,'bu2');
-
-    this.Wi1=tf.variable(tf.randomNormal([embDim*2,hiddenDim],0,0.05), true,'Wi1'); this.bi1=tf.variable(tf.zeros([hiddenDim]), true,'bi1');
-    this.Wi2=tf.variable(tf.randomNormal([hiddenDim,embDim],0,0.05), true,'Wi2'); this.bi2=tf.variable(tf.zeros([embDim]), true,'bi2');
+    this.itemDense1 = tf.layers.dense({units:hiddenDim, activation:'relu', useBias:true,
+      kernelInitializer:'glorotUniform', name:'itemDense1'});
+    this.itemOut   = tf.layers.dense({units:embDim, activation:null, useBias:true,
+      kernelInitializer:'glorotUniform', name:'itemOut'});
   }
 
-  userForward(userIdx){
-    return tf.tidy(()=>{
-      const idEmb=tf.gather(this.userEmbedding,userIdx);      // [B,D]
-      const h=idEmb.matMul(this.Wu1).add(this.bu1).relu();    // [B,H]
-      return h.matMul(this.Wu2).add(this.bu2);                // [B,D]
-    });
+  userForward(userIdxTensor){
+    const idx=userIdxTensor.reshape([-1]);
+    const emb=tf.gather(this.userEmbedding, idx);             // [B,D]
+    const h=this.userDense1.apply(emb);
+    const z=this.userOut.apply(h);
+    return z;
   }
-  itemForward(itemIdx){
-    return tf.tidy(()=>{
-      const idEmb=tf.gather(this.itemEmbedding,itemIdx);      // [B,D]
-      const G=tf.gather(this.itemGenres,itemIdx);             // [B,G]
-      const gEmb=G.matMul(this.Wg).add(this.bg);              // [B,D]
-      const x=tf.concat([idEmb,gEmb],-1);                     // [B,2D]
-      const h=x.matMul(this.Wi1).add(this.bi1).relu();        // [B,H]
-      return h.matMul(this.Wi2).add(this.bi2);                // [B,D]
-    });
+
+  itemForward(itemIdxTensor){
+    const idx=itemIdxTensor.reshape([-1]);
+    const emb=tf.gather(this.itemEmbedding, idx);             // [B,D]
+    const g=tf.gather(this.itemGenres, idx);                  // [B,18]
+    const x=tf.concat([emb,g],1);                             // [B,D+18]
+    const h=this.itemDense1.apply(x);
+    const z=this.itemOut.apply(h);
+    return z;
   }
-  async trainStep(uIdxArr,iIdxArr){
-    const u=tf.tensor1d(uIdxArr,'int32'), it=tf.tensor1d(iIdxArr,'int32');
-    const lossT = await this.optimizer.minimize(()=> {
-      const U=this.userForward(u), I=this.itemForward(it);
-      return (this.lossType==='bpr')? this._bpr(U,I) : this._inBatchSoftmax(U,I);
-    }, true);
-    const L=(await lossT.data())[0]; u.dispose(); it.dispose(); lossT.dispose(); return L;
+
+  score(uEmb, iEmb){ return uEmb.matMul(iEmb, false, true); }
+
+  async trainStep(userIdxArray, itemIdxArray){
+    const uIdx = tf.tensor1d(userIdxArray, 'int32');
+    const iIdx = tf.tensor1d(itemIdxArray, 'int32');
+
+    // collect trainable variables (embeddings + layer weights)
+    const vars = [
+      this.userEmbedding, this.itemEmbedding,
+      ...this.userDense1.getWeights(), ...this.userOut.getWeights(),
+      ...this.itemDense1.getWeights(), ...this.itemOut.getWeights()
+    ];
+
+    const lossScalar = await this.opt.minimize(() => tf.tidy(() => {
+      const U = this.userForward(uIdx);   // [B,D]
+      const I = this.itemForward(iIdx);   // [B,D]
+      let loss;
+      if (this.lossType === 'bpr') {
+        const shuffled = tf.gather(iIdx, tf.util.createShuffledIndices(iIdx.size));
+        const In = this.itemForward(shuffled);
+        const pos = U.mul(I).sum(1);
+        const neg = U.mul(In).sum(1);
+        loss = TwoTowerBase.bprLoss(pos, neg);
+        In.dispose(); pos.dispose(); neg.dispose();
+      } else {
+        const logits = this.score(U, I);  // [B,B]
+        loss = TwoTowerBase.softmaxInBatchLoss(logits);
+      }
+      return loss;
+    }), true, vars);
+
+    uIdx.dispose(); iIdx.dispose();
+    const val = (await lossScalar.data())[0];
+    lossScalar.dispose();
+    return val;
   }
-  getUserEmbeddingForIndex(uIdx){ return this.userForward(tf.tensor1d([uIdx],'int32')); } // [1,D]
+
+  getUserEmbeddingForIndex(uIdx){ return tf.tidy(()=>this.userForward(tf.tensor1d([uIdx],'int32'))); }
 }
