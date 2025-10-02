@@ -1,371 +1,382 @@
-/* app.js (ROBUST VERSION)
-   - Safe config parsing (no silent crashes if IDs differ)
-   - Clear error messages in Status if something fails
-   - Works whether data files are under ./data/ or next to index.html
+/* app.js
+   - Loads MovieLens 100K (u.item, u.data) from ./data/
+   - Builds user/item indexers and interactions
+   - Trains Two-Tower baseline + deep models
+   - Plots loss, draws PCA, and renders comparison table
 */
 
-const $ = (id) => document.getElementById(id);
-const S = {
-  interactions: [],
-  items: new Map(),
-  users: new Set(),
-  itemIds: new Set(),
-
-  userId2idx: new Map(),
-  itemId2idx: new Map(),
-  idx2userId: [],
-  idx2itemId: [],
-
-  userToRated: new Map(),
-  userTopRated: new Map(),
-
-  baseline: null,
-  deep: null,
-
-  lossSeriesBaseline: [],
-  lossSeriesDeep: []
-};
-
-function setStatus(msg){ const n=$('status'); if(n) n.textContent=`Status: ${msg}`; }
-function randChoice(arr){ return arr[(Math.random()*arr.length)|0]; }
-function shuffleInPlace(a){ for(let i=a.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [a[i],a[j]]=[a[j],a[i]]; } return a; }
-
-/* ---------- tiny canvas plot ---------- */
-function clearCanvas(ctx){ ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height); }
-function plotLoss(ctx, seriesA, seriesB){
-  if(!ctx) return;
-  clearCanvas(ctx);
-  const w=ctx.canvas.width,h=ctx.canvas.height, pad=32;
-  ctx.fillStyle='#0d1117'; ctx.fillRect(0,0,w,h);
-  ctx.strokeStyle='#374151'; ctx.lineWidth=1;
-  ctx.beginPath(); ctx.moveTo(pad,pad); ctx.lineTo(pad,h-pad); ctx.lineTo(w-pad,h-pad); ctx.stroke();
-  const maxVal=Math.max(1, ...seriesA.map(s=>s.y), ...seriesB.map(s=>s.y));
-  const draw=(S,color)=>{ if(!S.length) return; ctx.strokeStyle=color; ctx.lineWidth=1.5; ctx.beginPath();
-    for(let i=0;i<S.length;i++){
-      const x=pad+(i/Math.max(S.length-1,1))*(w-2*pad);
-      const y=h-pad-(S[i].y/maxVal)*(h-2*pad);
-      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-    } ctx.stroke();
+(() => {
+  const els = {
+    status: document.getElementById('status'),
+    loadBtn: document.getElementById('loadBtn'),
+    trainBtn: document.getElementById('trainBtn'),
+    testBtn:  document.getElementById('testBtn'),
+    loss:     document.getElementById('lossCanvas'),
+    pca:      document.getElementById('pcaCanvas'),
+    table:    document.getElementById('comparison'),
+    // hyperparams
+    maxInt:   document.getElementById('maxInt'),
+    embDim:   document.getElementById('embDim'),
+    hidden:   document.getElementById('hiddenDim'),
+    batch:    document.getElementById('batchSize'),
+    epochs:   document.getElementById('epochs'),
+    lr:       document.getElementById('lr'),
+    lossSel:  document.getElementById('lossSel'),
+    compare:  document.getElementById('compare'),
   };
-  draw(seriesA,'#22c55e'); // baseline
-  draw(seriesB,'#ef4444'); // deep
-  ctx.fillStyle='#9ca3af'; ctx.font='12px ui-sans-serif,system-ui';
-  ctx.fillText('Baseline (no hidden)', pad, pad-8);
-  ctx.fillStyle='#22c55e'; ctx.fillRect(pad-8, pad-16, 10, 10);
-  ctx.fillStyle='#ef4444'; ctx.fillRect(pad+130-8, pad-16, 10, 10);
-  ctx.fillStyle='#9ca3af'; ctx.fillText('Deep (1 hidden)', pad+130, pad-8);
-}
 
-/* ---------- tiny PCA (power method) ---------- */
-function pca2D(matrix, rows, cols){
-  const mean=new Float32Array(cols);
-  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++) mean[c]+=matrix[r*cols+c];
-  for(let c=0;c<cols;c++) mean[c]/=rows;
-  const X=new Float32Array(rows*cols);
-  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++) X[r*cols+c]=matrix[r*cols+c]-mean[c];
-  const power=(iter=30)=>{
-    let v=new Float32Array(cols); for(let c=0;c<cols;c++) v[c]=Math.random()-0.5;
-    for(let k=0;k<iter;k++){
-      const Xv=new Float32Array(rows);
-      for(let r=0;r<rows;r++){ let s=0; for(let c=0;c<cols;c++) s+=X[r*cols+c]*v[c]; Xv[r]=s; }
-      const w=new Float32Array(cols);
-      for(let c=0;c<cols;c++){ let s=0; for(let r=0;r<rows;r++) s+=X[r*cols+c]*Xv[r]; w[c]=s; }
-      let n=0; for(let c=0;c<cols;c++) n+=w[c]*w[c]; n=Math.sqrt(n)||1;
-      for(let c=0;c<cols;c++) v[c]=w[c]/n;
-    }
-    return v;
-  };
-  const pc1=power(30);
-  for(let r=0;r<rows;r++){
-    let s=0; for(let c=0;c<cols;c++) s+=X[r*cols+c]*pc1[c];
-    for(let c=0;c<cols;c++) X[r*cols+c]-=s*pc1[c];
-  }
-  const pc2=power(30);
-  const out=new Float32Array(rows*2);
-  for(let r=0;r<rows;r++){
-    let a=0,b=0;
-    for(let c=0;c<cols;c++){ const v=matrix[r*cols+c]-mean[c]; a+=v*pc1[c]; b+=v*pc2[c]; }
-    out[r*2]=a; out[r*2+1]=b;
-  }
-  return out;
-}
-function drawProjection(ctx, points){
-  if(!ctx) return;
-  clearCanvas(ctx);
-  const w=ctx.canvas.width,h=ctx.canvas.height,pad=20;
-  ctx.fillStyle='#0d1117'; ctx.fillRect(0,0,w,h);
-  let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
-  for(let i=0;i<points.length;i+=2){ const x=points[i],y=points[i+1];
-    if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y;
-  }
-  const sx=(w-2*pad)/(maxX-minX||1), sy=(h-2*pad)/(maxY-minY||1);
-  ctx.fillStyle='#60a5fa';
-  for(let i=0;i<points.length;i+=2){
-    const x=pad+(points[i]-minX)*sx, y=h-pad-(points[i+1]-minY)*sy;
-    ctx.beginPath(); ctx.arc(x,y,2,0,Math.PI*2); ctx.fill();
-  }
-}
+  function setStatus(msg){ els.status.textContent = `Status: ${msg}`; }
+  function enTrain(on){ els.trainBtn.disabled = !on; }
+  function enTest(on){ els.testBtn.disabled = !on; }
 
-/* ---------- robust fetch helper ---------- */
-async function fetchTextTry(paths) {
-  for (const p of paths) {
-    try {
-      const r = await fetch(p + (p.includes('?') ? '' : `?v=${Date.now()}`));
-      if (r.ok) return await r.text();
-    } catch (_) { /* try next */ }
-  }
-  throw new Error(`Could not fetch any of: ${paths.join(', ')}`);
-}
+  // ---------- Data loading ----------
+  const MovieDataLoader = {
+    async load(itemPath, dataPath){
+      const [itemText, dataText] = await Promise.all([
+        fetch(itemPath).then(r=>{ if(!r.ok) throw new Error('u.item fetch'); return r.text(); }),
+        fetch(dataPath).then(r=>{ if(!r.ok) throw new Error('u.data fetch'); return r.text(); }),
+      ]);
 
-/* ---------- LOAD DATA (tries ./data/* and ./*) ---------- */
-async function loadData(){
-  await tf.ready();
-  try{
-    const itemTxt = await fetchTextTry(['./data/u.item','./u.item','u.item','data/u.item']);
-    const dataTxt = await fetchTextTry(['./data/u.data','./u.data','u.data','data/u.data']);
-
-    S.items.clear(); S.itemIds.clear(); S.users.clear();
-    S.interactions.length=0; S.userToRated.clear(); S.userTopRated.clear();
-
-    // u.item
-    for(const line of itemTxt.split('\n').filter(Boolean)){
-      const parts=line.split('|'); if(parts.length<2) continue;
-      const id=+parts[0]; let title=parts[1]; let year=null;
-      const m=title.match(/\((\d{4})\)\s*$/); if(m){ year=+m[1]; title=title.replace(/\s*\(\d{4}\)\s*$/,''); }
-      const flags=parts.slice(5).map(x=>x==='1'?1:0);
-      const use=(flags.length>=19)? flags.slice(1) : flags;
-      const g=new Int8Array(18); for(let k=0;k<Math.min(18,use.length);k++) g[k]=use[k];
-      S.items.set(id,{title,year,genres:g}); S.itemIds.add(id);
-    }
-
-    // u.data
-    for(const line of dataTxt.split('\n').filter(Boolean)){
-      const [u,i,r,t]=line.split('\t');
-      const userId=+u,itemId=+i,rating=+r,ts=+t;
-      if(Number.isFinite(userId)&&Number.isFinite(itemId)){
-        S.interactions.push({userId,itemId,rating,ts}); S.users.add(userId);
+      // parse u.item
+      // id|title|release_date|...|19 genre flags  OR sometimes 18 flags (without "Unknown")
+      const linesI = itemText.split('\n').filter(Boolean);
+      const items = new Map(); // id -> {title, year}
+      let maxItemId = 0;
+      for(const ln of linesI){
+        const p = ln.split('|');
+        const id = parseInt(p[0],10);
+        if (!Number.isFinite(id)) continue;
+        const title = p[1] || `Movie ${id}`;
+        const year = (title.match(/\((\d{4})\)/)||[])[1] || '';
+        items.set(id, {title, year});
+        if (id>maxItemId) maxItemId=id;
       }
-    }
 
-    // indexers
-    const userIds=[...S.users].sort((a,b)=>a-b), itemIds=[...S.itemIds].sort((a,b)=>a-b);
-    S.idx2userId=userIds; S.idx2itemId=itemIds;
-    S.userId2idx=new Map(userIds.map((u,idx)=>[u,idx]));
-    S.itemId2idx=new Map(itemIds.map((i,idx)=>[i,idx]));
+      // parse u.data
+      const linesD = dataText.split('\n').filter(Boolean);
+      const interactions = [];
+      const userSet = new Set();
+      const itemSet = new Set();
 
-    // lookups
-    for(const {userId,itemId} of S.interactions){
-      if(!S.userToRated.has(userId)) S.userToRated.set(userId,new Set());
-      S.userToRated.get(userId).add(itemId);
-    }
-    const byUser=new Map();
-    for(const r of S.interactions){ if(!byUser.has(r.userId)) byUser.set(r.userId,[]); byUser.get(r.userId).push(r); }
-    for(const [uid,arr] of byUser){
-      arr.sort((a,b)=> (b.rating-a.rating)||(b.ts-a.ts));
-      const top = arr.slice(0,60).map(x=>({ itemId:x.itemId, rating:x.rating, ts:x.ts,
-        title:S.items.get(x.itemId)?.title ?? String(x.itemId), year:S.items.get(x.itemId)?.year ?? '' }));
-      S.userTopRated.set(uid, top);
-    }
+      for(const ln of linesD){
+        const [u,i,r,t] = ln.split('\t');
+        const userId = parseInt(u,10);
+        const itemId = parseInt(i,10);
+        const rating = parseInt(r,10);
+        const ts     = parseInt(t,10);
+        if(!Number.isFinite(userId) || !Number.isFinite(itemId)) continue;
+        interactions.push({userId, itemId, rating, ts});
+        userSet.add(userId); itemSet.add(itemId);
+      }
 
-    // enable buttons
-    if ($('btn-train')) $('btn-train').disabled=false;
-    if ($('btn-test'))  $('btn-test').disabled=false;
+      // indexers
+      const users = Array.from(userSet).sort((a,b)=>a-b);
+      const userToIdx = new Map(users.map((u,ix)=>[u,ix]));
+      const itemsSorted = Array.from(itemSet).sort((a,b)=>a-b);
+      const itemToIdx = new Map(itemsSorted.map((it,ix)=>[it,ix]));
 
-    setStatus(`data loaded — users: ${userIds.length}, items: ${itemIds.length}, interactions: ${S.interactions.length}`);
-  }catch(e){
-    console.error(e);
-    setStatus('fetch failed. Ensure ./data/u.item and ./data/u.data exist (or next to index.html).');
-  }
-}
+      // build ratingsByUser for test/eval
+      const byUser = new Map(); // userId -> array of {itemId, rating, ts}
+      for(const r of interactions){
+        if(!byUser.has(r.userId)) byUser.set(r.userId, []);
+        byUser.get(r.userId).push({itemId:r.itemId, rating:r.rating, ts:r.ts});
+      }
+      // keep only users with at least 20 ratings (for sampling)
+      const heavyUsers = users.filter(u => byUser.get(u)?.length >= 20);
 
-/* ---------- SAFE CONFIG READING ---------- */
-function readCfg(){
-  // helper to safely read numbers
-  const num = (id, def) => {
-    const el=$(id); if(!el) return def;
-    const n=Number(el.value); return Number.isFinite(n)?n:def;
-  };
-  const sel = (id, def) => {
-    const el=$(id); if(!el) return def;
-    const v=el.value;
-    // normalize loss label to internal value
-    if (v.toLowerCase().includes('softmax')) return 'softmax';
-    if (v.toLowerCase().includes('bpr')) return 'bpr';
-    return v || def;
-  };
-  const yesno = (id, def) => {
-    const el=$(id); if(!el) return def;
-    const v=(el.value||'').toLowerCase();
-    if (v.includes('no')) return false;
-    return true;
-  };
+      return {
+        interactions, users, items: itemsSorted, userToIdx, itemToIdx, itemsMeta: items,
+        ratingsByUser: byUser, heavyUsers,
+        numUsers: users.length, numItems: itemsSorted.length
+      };
+    },
 
-  return {
-    maxInt: num('cfg-max-int', 80000),
-    embDim: num('cfg-emb-dim', 32),
-    hidDim: num('cfg-hid-dim', 64),
-    batch:  num('cfg-batch', 256),
-    epochs: num('cfg-epochs', 5),
-    lr:     num('cfg-lr', 0.003),
-    lossType: sel('cfg-loss', 'softmax'),       // 'softmax' | 'bpr'
-    trainBaseline: yesno('cfg-train-baseline', true)
-  };
-}
-
-/* ---------- batching & pairs ---------- */
-function buildPairs(maxN){
-  const xs=S.interactions.slice(0, Math.min(maxN,S.interactions.length));
-  shuffleInPlace(xs);
-  const users=new Int32Array(xs.length), items=new Int32Array(xs.length);
-  for(let k=0;k<xs.length;k++){ users[k]=S.userId2idx.get(xs[k].userId); items[k]=S.itemId2idx.get(xs[k].itemId); }
-  return {users, items};
-}
-function* batcher(users, items, batch){
-  let i=0; while(i<users.length){
-    const end=Math.min(i+batch, users.length);
-    yield { u: tf.tensor1d(users.subarray(i,end),'int32'), p: tf.tensor1d(items.subarray(i,end),'int32') };
-    i=end;
-  }
-}
-
-/* ---------- TRAIN ---------- */
-async function train(){
-  try{
-    if(!S.idx2userId.length){ setStatus('load data first.'); return; }
-    const cfg=readCfg();
-    setStatus('initializing models…');
-
-    const {users, items} = buildPairs(cfg.maxInt);
-
-    // item genre features for deep tower
-    const numItems=S.idx2itemId.length;
-    const genres = new Float32Array(numItems*18);
-    for(let i=0;i<numItems;i++){
-      const id=S.idx2itemId[i], g=S.items.get(id)?.genres;
-      if(g) for(let k=0;k<18;k++) genres[i*18+k]=g[k];
-    }
-
-    // (re)create models
-    S.deep?.dispose?.(); S.baseline?.dispose?.();
-    S.deep = new TwoTowerModel(S.idx2userId.length, S.idx2itemId.length, cfg.embDim, {
-      deep:true, hiddenDim: cfg.hidDim, lossType: cfg.lossType, learningRate: cfg.lr, itemFeatures:{data:genres, dim:18}
-    });
-    if(cfg.trainBaseline){
-      S.baseline = new TwoTowerModel(S.idx2userId.length, S.idx2itemId.length, cfg.embDim, {
-        deep:false, hiddenDim:0, lossType: cfg.lossType, learningRate: cfg.lr
-      });
-    } else {
-      S.baseline=null;
-    }
-
-    const ctx=$('loss-canvas')?.getContext('2d');
-    S.lossSeriesBaseline.length=0; S.lossSeriesDeep.length=0;
-
-    const stepsPerEpoch = Math.ceil(users.length / Math.max(1,cfg.batch));
-    let step=0;
-
-    for(let e=0;e<cfg.epochs;e++){
-      for(const {u,p} of batcher(users, items, cfg.batch)){
-        const lossDeep = await S.deep.trainStep(u,p);
-        S.lossSeriesDeep.push({x:step, y:lossDeep});
-        if(S.baseline){
-          const lossBase = await S.baseline.trainStep(u,p);
-          S.lossSeriesBaseline.push({x:step, y:lossBase});
+    // build shuffled minibatches (userIdx, posItemIdx)
+    *makeBatches(DATA, batchSize, epochs, maxInteractions){
+      const pool = DATA.interactions.slice(0, maxInteractions ?? DATA.interactions.length);
+      for(let ep=0; ep<epochs; ep++){
+        // shuffle each epoch
+        for(let i=pool.length-1;i>0;i--){
+          const j = (Math.random()* (i+1))|0; const tmp = pool[i]; pool[i] = pool[j]; pool[j]=tmp;
         }
-        plotLoss(ctx, S.lossSeriesBaseline, S.lossSeriesDeep);
-        setStatus(`training… step ${++step}/${stepsPerEpoch*cfg.epochs} (epoch ${e+1}/${cfg.epochs})`);
-        await tf.nextFrame();
-        u.dispose(); p.dispose();
+        for(let s=0; s<pool.length; s+=batchSize){
+          const slice = pool.slice(s, s+batchSize);
+          const uIdx = new Int32Array(slice.length);
+          const iIdx = new Int32Array(slice.length);
+          for(let k=0;k<slice.length;k++){
+            uIdx[k] = DATA.userToIdx.get(slice[k].userId);
+            iIdx[k] = DATA.itemToIdx.get(slice[k].itemId);
+          }
+          yield {uIdx, iIdx, step: s/batchSize, epoch: ep+1, stepsPerEpoch: Math.ceil(pool.length/batchSize), totalSteps: Math.ceil(pool.length/batchSize)*epochs};
+        }
       }
+    },
+
+    // recommendation helper
+    recommendForRandomUser: async ({DATA, baseline, deepModel, topK=10})=>{
+      // pick user with >= 20 ratings
+      const userId = DATA.heavyUsers[(Math.random()*DATA.heavyUsers.length)|0];
+      const rated = DATA.ratingsByUser.get(userId).slice().sort((a,b)=>{
+        if(b.rating!==a.rating) return b.rating-a.rating;
+        return b.ts - a.ts;
+      });
+      const topRatedTitles = rated.slice(0, topK).map(r => DATA.itemsMeta.get(r.itemId)?.title || `Movie ${r.itemId}`);
+
+      const uIdx = DATA.userToIdx.get(userId);
+      const ratedSet = new Set(rated.map(x=>x.itemId));
+
+      // compute recs
+      const run = async (model) => {
+        if(!model) return [];
+        const uT = tf.tensor2d([uIdx],[1,1],'int32');
+        const uEmb = model.userForward(uT); // [1,dim]
+        uT.dispose();
+        // all item embeddings
+        const all = tf.tensor2d(model.getAllItemEmbeddings(), [DATA.numItems, model.embDim]);
+        // scores = uEmb @ all^T
+        const scores = tf.matMul(uEmb, all, false, true).dataSync(); // Float32Array length numItems
+        uEmb.dispose(); all.dispose();
+
+        // topK excluding rated
+        const idxs = [];
+        for(let i=0;i<DATA.numItems;i++){
+          const itId = DATA.items[i];
+          if(!ratedSet.has(itId)) idxs.push({i, s: scores[i]});
+        }
+        idxs.sort((a,b)=>b.s-a.s);
+        const top = idxs.slice(0, topK).map(o=>DATA.itemsMeta.get(DATA.items[o.i])?.title || `Movie ${DATA.items[o.i]}`);
+        return top;
+      };
+
+      const baselineRec = await run(baseline);
+      const deepRec     = await run(deepModel);
+
+      return { topRated: topRatedTitles, recBase: baselineRec, recDeep: deepRec };
+    }
+  };
+
+  // expose for dev (optional)
+  window.MovieDataLoader = MovieDataLoader;
+
+  // ---------- Plotting ----------
+  const lossHistoryBase = [];
+  const lossHistoryDeep = [];
+
+  function drawLoss(){
+    const cvs = els.loss, ctx = cvs.getContext('2d');
+    const W=cvs.width, H=cvs.height;
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle='rgba(255,255,255,.04)'; ctx.fillRect(0,0,W,H);
+
+    const all = lossHistoryBase.concat(lossHistoryDeep);
+    if (!all.length) return;
+
+    const maxBatch = Math.max(...all.map(d=>d.batch));
+    const minLoss  = Math.min(...all.map(d=>d.loss));
+    const maxLoss  = Math.max(...all.map(d=>d.loss));
+    const margin = 24, plotW=W-margin*2, plotH=H-margin*2;
+    const xy = (d) => {
+      const x = margin + (d.batch / Math.max(1,maxBatch)) * plotW;
+      const y = margin + (1 - (d.loss - minLoss)/Math.max(1e-8,(maxLoss-minLoss))) * plotH;
+      return [x,y];
+    };
+
+    // axes
+    ctx.strokeStyle='rgba(255,255,255,.15)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(margin, margin); ctx.lineTo(margin, H-margin); ctx.lineTo(W-margin, H-margin); ctx.stroke();
+
+    // baseline green
+    if(lossHistoryBase.length){
+      ctx.strokeStyle='#20c997'; ctx.lineWidth=2; ctx.beginPath();
+      lossHistoryBase.forEach((d,i)=>{ const [x,y]=xy(d); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
+      ctx.stroke();
+    }
+    // deep red
+    if(lossHistoryDeep.length){
+      ctx.strokeStyle='#ff4d4f'; ctx.lineWidth=2; ctx.beginPath();
+      lossHistoryDeep.forEach((d,i)=>{ const [x,y]=xy(d); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
+      ctx.stroke();
+    }
+  }
+
+  // quick PCA (power method for 2 PCs)
+  function drawPCA(matrix, sampleN=1200){
+    const cvs = els.pca, ctx = cvs.getContext('2d');
+    const W=cvs.width, H=cvs.height;
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle='rgba(255,255,255,.04)'; ctx.fillRect(0,0,W,H);
+    if(!matrix || !matrix.length) return;
+
+    const D = matrix[0].length, M = matrix.length;
+    const idx = [];
+    const take = Math.min(sampleN, M);
+    for(let i=0;i<take;i++) idx.push((Math.random()*M)|0);
+    const X = idx.map(i=>matrix[i]);
+
+    // center
+    const mean = new Float32Array(D);
+    X.forEach(v=>{ for(let j=0;j<D;j++) mean[j]+=v[j]; });
+    for(let j=0;j<D;j++) mean[j] /= X.length;
+    const C = X.map(v=>{
+      const r = new Float32Array(D);
+      for(let j=0;j<D;j++) r[j]=v[j]-mean[j];
+      return r;
+    });
+
+    const power = (A,iters=20)=>{
+      let v = new Float32Array(D);
+      for(let j=0;j<D;j++) v[j]=Math.random()-0.5;
+      let n = Math.hypot(...v); for(let j=0;j<D;j++) v[j]/=(n||1);
+      for(let t=0;t<iters;t++){
+        const w = new Float32Array(D);
+        for(const row of A){
+          let dot=0; for(let k=0;k<D;k++) dot += row[k]*v[k];
+          for(let k=0;k<D;k++) w[k]+= row[k]*dot;
+        }
+        n = Math.hypot(...w); for(let j=0;j<D;j++) v[j]=w[j]/(n||1);
+      }
+      return v;
+    };
+    const pc1 = power(C,20);
+    const C2 = C.map(r=>{
+      let dot=0; for(let k=0;k<D;k++) dot+= r[k]*pc1[k];
+      const rr = new Float32Array(D);
+      for(let k=0;k<D;k++) rr[k]= r[k]-dot*pc1[k];
+      return rr;
+    });
+    const pc2 = power(C2,20);
+
+    const pts = C.map(r=>{
+      let x=0,y=0; for(let k=0;k<D;k++){ x+= r[k]*pc1[k]; y+= r[k]*pc2[k]; }
+      return [x,y];
+    });
+    const xs=pts.map(p=>p[0]), ys=pts.map(p=>p[1]);
+    const xMin=Math.min(...xs), xMax=Math.max(...xs);
+    const yMin=Math.min(...ys), yMax=Math.max(...ys);
+
+    ctx.fillStyle = '#68a9ff';
+    const pad=16;
+    pts.forEach(([x,y])=>{
+      const px = (x-xMin)/Math.max(1e-6,(xMax-xMin));
+      const py = (y-yMin)/Math.max(1e-6,(yMax-yMin));
+      const cx = pad + px*(W-pad*2);
+      const cy = pad + (1-py)*(H-pad*2);
+      ctx.fillRect(cx,cy,2,2);
+    });
+  }
+
+  // ---------- Training/Test orchestration ----------
+  let DATA = null, baseline = null, deepModel = null, trained=false;
+
+  async function onLoad(){
+    try{
+      setStatus('loading data…');
+      DATA = await MovieDataLoader.load('./data/u.item','./data/u.data');
+      setStatus(`data loaded — users: ${DATA.numUsers}, items: ${DATA.numItems}, interactions: ${DATA.interactions.length}`);
+      enTrain(true); enTest(false); trained=false;
+      lossHistoryBase.length=0; lossHistoryDeep.length=0; drawLoss(); drawPCA([]);
+    }catch(e){
+      console.error(e);
+      setStatus('fetch failed. Ensure ./data/u.item and ./data/u.data exist (case-sensitive).');
+    }
+  }
+
+  async function onTrain(){
+    if(!DATA){ setStatus('load data first'); return; }
+    // hyperparams
+    const embDim = +els.embDim.value || 40;
+    const hidden = +els.hidden.value || 64;
+    const lr     = +els.lr.value     || 0.003;
+    const batch  = +els.batch.value  || 256;
+    const epochs = +els.epochs.value || 5;
+    const maxInt = +els.maxInt.value || DATA.interactions.length;
+    const lossType = (els.lossSel.value.startsWith('In-batch')) ? 'softmax' : 'bpr';
+    const compare = els.compare.value.startsWith('Yes');
+
+    // dispose any prior models
+    if(baseline && baseline.dispose) baseline.dispose();
+    if(deepModel && deepModel.dispose) deepModel.dispose();
+    baseline=null; deepModel=null; trained=false;
+
+    setStatus('building models…');
+    if(compare){
+      baseline = new TwoTowerModel(DATA.numUsers, DATA.numItems, embDim, {
+        deep:false, hiddenDim:0, lossType, learningRate:lr
+      });
+    }
+    deepModel = new TwoTowerModel(DATA.numUsers, DATA.numItems, embDim, {
+      deep:true, hiddenDim:hidden, lossType, learningRate:lr
+    });
+
+    // train
+    setStatus('training…');
+    enTrain(false); enTest(false);
+    lossHistoryBase.length=0; lossHistoryDeep.length=0;
+
+    const drawEvery = 10;
+    let batchId = 0, stepSeen = 0;
+    for (const {uIdx, iIdx, step, epoch, stepsPerEpoch, totalSteps} of MovieDataLoader.makeBatches(DATA, batch, epochs, maxInt)){
+      if (baseline) {
+        const l = await baseline.trainStep(uIdx, iIdx);
+        if(Number.isFinite(l)) lossHistoryBase.push({batch:batchId, loss:l});
+      }
+      {
+        const l = await deepModel.trainStep(uIdx, iIdx);
+        if(Number.isFinite(l)) lossHistoryDeep.push({batch:batchId, loss:l});
+      }
+      batchId++; stepSeen++;
+      if (batchId % drawEvery === 0){ drawLoss(); await tf.nextFrame(); }
+      setStatus(`training… step ${stepSeen}/${stepsPerEpoch*epochs} (epoch ${epoch}/${epochs})`);
     }
 
-    // PCA projection (sample up to 1000 items)
-    const embDim=cfg.embDim;
-    const itemEmb = S.deep.getAllItemEmbeddings(); // Float32Array [numItems*embDim]
-    const N=Math.min(1000,numItems);
-    const idxs=Array.from({length:numItems},(_,i)=>i); shuffleInPlace(idxs);
-    const mat=new Float32Array(N*embDim);
-    for(let r=0;r<N;r++){
-      const i=idxs[r]; mat.set(itemEmb.subarray(i*embDim,(i+1)*embDim), r*embDim);
+    drawLoss();
+
+    // PCA from deep item embeddings
+    const flat = deepModel.getAllItemEmbeddings(); // Float32Array
+    const embMat = [];
+    for (let i=0;i<DATA.numItems;i++){
+      embMat.push(Array.from(flat.slice(i*embDim, (i+1)*embDim)));
     }
-    const proj=pca2D(mat,N,embDim);
-    drawProjection($('proj-canvas')?.getContext('2d'), proj);
+    drawPCA(embMat);
 
-    setStatus('training done. Click Test to view recommendations.');
-  }catch(err){
-    console.error(err);
-    setStatus(`error during training: ${err.message}`);
+    setStatus('training finished.');
+    trained=true; enTest(true);
   }
-}
 
-/* ---------- inference / table ---------- */
-function buildScoresAndTopK(model, userId, k, excludeSet){
-  const uIdx=S.userId2idx.get(userId); if(uIdx==null) return [];
-  const scores=model.getScoresForAllItems(uIdx);
-  for(const itemId of excludeSet){
-    const ii=S.itemId2idx.get(itemId); if(ii!=null) scores[ii]=-1e9;
+  async function onTest(){
+    if(!trained){ setStatus('train first'); return; }
+    setStatus('generating recommendations…');
+    const {topRated, recBase, recDeep} = await MovieDataLoader.recommendForRandomUser({
+      DATA, baseline, deepModel, topK:10
+    });
+    renderTable(topRated, recBase, recDeep);
+    setStatus('recommendations generated successfully!');
   }
-  const N=scores.length;
-  const idxs=Array.from({length:N},(_,i)=>i);
-  idxs.sort((a,b)=>scores[b]-scores[a]);
-  const out=[];
-  for(let i=0;i<Math.min(k,N);i++){
-    const ii=idxs[i], id=S.idx2itemId[ii], s=scores[ii];
-    const it=S.items.get(id);
-    out.push({rank:i+1, itemId:id, title:it?.title||String(id), year:it?.year||'', score:+s.toFixed(4)});
+
+  function renderTable(topRated, recBase, recDeep){
+    const tr = a => a.map((t,i)=>`<tr><td>${i+1}</td><td>${t}</td></tr>`).join('');
+    els.table.innerHTML = `
+      <div class="grid-3">
+        <div>
+          <h4>Top-10 Rated (historical)</h4>
+          <table class="t"><thead><tr><th>#</th><th>Movie</th></tr></thead><tbody>${tr(topRated)}</tbody></table>
+        </div>
+        <div>
+          <h4>Top-10 Recommended (Baseline)</h4>
+          <table class="t"><thead><tr><th>#</th><th>Movie</th></tr></thead><tbody>${tr(recBase)}</tbody></table>
+        </div>
+        <div>
+          <h4>Top-10 Recommended (Deep)</h4>
+          <table class="t"><thead><tr><th>#</th><th>Movie</th></tr></thead><tbody>${tr(recDeep)}</tbody></table>
+        </div>
+      </div>`;
   }
-  return out.slice(0,k);
-}
 
-function renderTable(userId, topRated, recDeep, recBase){
-  const box=$('table-box'); if(!box) return;
-  const th=t=>`<th>${t}</th>`;
-  const row=(a,b,c)=>`<tr>
-    <td class="num">${a?.rank??''}</td><td>${a?.title??''}</td><td class="num">${a?.rating??''}</td><td class="num">${a?.year??''}</td>
-    <td class="sep"></td>
-    <td class="num">${b?.rank??''}</td><td>${b?.title??''}</td><td class="num">${b?.score??''}</td><td class="num">${b?.year??''}</td>
-    <td class="sep"></td>
-    <td class="num">${c?.rank??''}</td><td>${c?.title??''}</td><td class="num">${c?.score??''}</td><td class="num">${c?.year??''}</td>
-  </tr>`;
-  const rows=[];
-  for(let i=0;i<10;i++) rows.push(row(topRated[i], recDeep[i], recBase?.[i]));
-  box.innerHTML = `
-    <h3>Top-10 Rated vs Recommended (Baseline vs Deep) — User ${userId}</h3>
-    <table class="cmp">
-      <thead>
-        <tr>
-          ${th('#')+th('Top-rated title')+th('★')+th('Year')}
-          <th class="sep"></th>
-          ${th('#')+th('Recommended (Deep)')+th('Score')+th('Year')}
-          <th class="sep"></th>
-          ${th('#')+th('Recommended (Baseline)')+th('Score')+th('Year')}
-        </tr>
-      </thead>
-      <tbody>${rows.join('')}</tbody>
-    </table>`;
-}
+  // wire buttons once
+  els.loadBtn.addEventListener('click', onLoad);
+  els.trainBtn.addEventListener('click', onTrain);
+  els.testBtn.addEventListener('click', onTest);
 
-function testOne(){
-  if(!S.deep){ setStatus('train first.'); return; }
-  const candidates=[...S.userTopRated.entries()].filter(([,arr])=>arr.length>=20).map(([u])=>u);
-  if(!candidates.length){ setStatus('no user with ≥20 ratings.'); return; }
-  const userId=randChoice(candidates);
-  const ratedList=S.userTopRated.get(userId)||[];
-  const exclude=new Set(ratedList.map(x=>x.itemId));
-  const topRated=ratedList.slice(0,10).map((x,i)=>({rank:i+1, ...x}));
-  const recDeep=buildScoresAndTopK(S.deep,userId,10,exclude);
-  const recBase=S.baseline? buildScoresAndTopK(S.baseline,userId,10,exclude):null;
-  renderTable(userId, topRated, recDeep, recBase);
-  setStatus('recommendations generated successfully!');
-}
-
-/* ---------- wire up ---------- */
-window.addEventListener('load', ()=>{
-  $('btn-load')?.addEventListener('click', async()=>{
-    $('btn-load').disabled=true; setStatus('loading…'); await loadData(); $('btn-load').disabled=false;
-  });
-  $('btn-train')?.addEventListener('click', async()=>{
-    $('btn-train').disabled=true; await train(); $('btn-train').disabled=false;
-  });
-  $('btn-test')?.addEventListener('click', ()=> testOne());
-});
+  // expose for dev
+  window.__state = () => ({DATA, baseline, deepModel, lossHistoryBase, lossHistoryDeep});
+})();
