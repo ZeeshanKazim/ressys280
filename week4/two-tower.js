@@ -1,7 +1,9 @@
-/* two-tower.js — Two-Tower Retrieval (baseline & “deep”)
-   Fixes: no fixed variable names + proper dispose() to avoid
-   “Variable with name ... was already registered”.
-   Works with the app.js you’re using.
+/* two-tower.js
+   Minimal Two-Tower model in TensorFlow.js
+   - userEmbedding / itemEmbedding tables (tf.Variable)
+   - optional single-hidden-layer MLP per tower (deep: true)
+   - scoring by dot product
+   - losses: in-batch softmax (default) or BPR pairwise
 */
 
 class TwoTowerModel {
@@ -9,191 +11,129 @@ class TwoTowerModel {
    * @param {number} numUsers
    * @param {number} numItems
    * @param {number} embDim
-   * @param {{
-   *   deep: boolean,
-   *   hiddenDim: number,
-   *   lossType: 'softmax'|'bpr',
-   *   learningRate: number,
-   *   itemFeatures?: { data: Float32Array, dim: number }  // optional 18-genre flags
-   * }} opts
+   * @param {{deep:boolean, hiddenDim:number, lossType:'softmax'|'bpr', learningRate:number}} opts
    */
-  constructor(numUsers, numItems, embDim, opts) {
+  constructor(numUsers, numItems, embDim, opts={}){
     this.numUsers = numUsers;
     this.numItems = numItems;
     this.embDim   = embDim;
 
-    this.deep         = !!opts.deep;
-    this.hiddenDim    = Math.max(0, opts.hiddenDim|0);
-    this.lossType     = (opts.lossType || 'softmax');
-    this.learningRate = +opts.learningRate || 0.003;
+    this.opts = Object.assign({
+      deep: true,
+      hiddenDim: 64,
+      lossType: 'softmax', // or 'bpr'
+      learningRate: 3e-3,
+    }, opts);
 
-    // Optional item features (e.g., 18-dim genres)
-    this.itemFeatDim = 0;
-    this.itemFeatT   = null;
-    if (opts.itemFeatures && opts.itemFeatures.data && opts.itemFeatures.dim > 0) {
-      this.itemFeatDim = opts.itemFeatures.dim|0;
-      // shape [numItems, featDim]
-      this.itemFeatT = tf.tensor2d(opts.itemFeatures.data, [numItems, this.itemFeatDim], 'float32');
-    }
+    // --- embedding tables (do NOT reuse global variable names) ---
+    const uInit = tf.randomNormal([numUsers, embDim], 0, 0.05);
+    const iInit = tf.randomNormal([numItems, embDim], 0, 0.05);
+    this.userEmbedding = tf.variable(uInit); // no "name" to avoid duplicate registration
+    this.itemEmbedding = tf.variable(iInit);
+    uInit.dispose(); iInit.dispose();
 
-    // --- Embedding tables (no explicit names => no collisions) ---
-    this.userEmbedding = tf.variable(tf.randomNormal([numUsers, embDim], 0, 0.05, 'float32'));
-    this.itemEmbedding = tf.variable(tf.randomNormal([numItems, embDim], 0, 0.05, 'float32'));
-
-    // --- Optional MLP heads (for “deep”) ---
-    // User MLP: [embDim] -> [hiddenDim] -> [embDim]
-    if (this.deep && this.hiddenDim > 0) {
-      this.uW1 = tf.variable(tf.randomNormal([embDim, this.hiddenDim], 0, 0.05, 'float32'));
-      this.ub1 = tf.variable(tf.zeros([this.hiddenDim]));
-      this.uW2 = tf.variable(tf.randomNormal([this.hiddenDim, embDim], 0, 0.05, 'float32'));
+    // optional single hidden layer weights (for deep tower MLP)
+    if (this.opts.deep && this.opts.hiddenDim > 0){
+      // User tower: embDim -> hiddenDim -> embDim
+      this.uW1 = tf.variable(tf.randomNormal([embDim, this.opts.hiddenDim], 0, 0.05));
+      this.ub1 = tf.variable(tf.zeros([this.opts.hiddenDim]));
+      this.uW2 = tf.variable(tf.randomNormal([this.opts.hiddenDim, embDim], 0, 0.05));
       this.ub2 = tf.variable(tf.zeros([embDim]));
 
-      // Item tower can use optional genre features: concat([embDim] , [featDim]) -> hidden -> embDim
-      const itemInDim = embDim + this.itemFeatDim;
-      this.iW1 = tf.variable(tf.randomNormal([itemInDim, this.hiddenDim], 0, 0.05, 'float32'));
-      this.ib1 = tf.variable(tf.zeros([this.hiddenDim]));
-      this.iW2 = tf.variable(tf.randomNormal([this.hiddenDim, embDim], 0, 0.05, 'float32'));
+      // Item tower
+      this.iW1 = tf.variable(tf.randomNormal([embDim, this.opts.hiddenDim], 0, 0.05));
+      this.ib1 = tf.variable(tf.zeros([this.opts.hiddenDim]));
+      this.iW2 = tf.variable(tf.randomNormal([this.opts.hiddenDim, embDim], 0, 0.05));
       this.ib2 = tf.variable(tf.zeros([embDim]));
     } else {
-      this.uW1 = this.ub1 = this.uW2 = this.ub2 = null;
-      this.iW1 = this.ib1 = this.iW2 = this.ib2 = null;
+      this.uW1=this.ub1=this.uW2=this.ub2=null;
+      this.iW1=this.ib1=this.iW2=this.ib2=null;
     }
 
-    this.opt = tf.train.adam(this.learningRate);
+    this.optimizer = tf.train.adam(this.opts.learningRate);
   }
 
-  /* ---------- housekeeping ---------- */
-  dispose() {
-    const arr = [
-      this.userEmbedding, this.itemEmbedding,
-      this.uW1, this.ub1, this.uW2, this.ub2,
-      this.iW1, this.ib1, this.iW2, this.ib2,
-      this.itemFeatT
-    ].filter(Boolean);
-    tf.dispose(arr);
-  }
-
-  /* ---------- gather ---------- */
-  userForward(idx1d) {
-    // idx1d: int32 [B]
-    return tf.tidy(() => {
-      const u = tf.gather(this.userEmbedding, idx1d); // [B, embDim]
-      if (!(this.deep && this.hiddenDim > 0)) return u; // baseline
-      const h1 = tf.relu(tf.add(tf.matMul(u, this.uW1), this.ub1));   // [B, hidden]
-      const o  = tf.add(tf.matMul(h1, this.uW2), this.ub2);           // [B, embDim]
-      return o;
-    });
-  }
-
-  itemForward(idx1d) {
-    // idx1d: int32 [B]
-    return tf.tidy(() => {
-      const e = tf.gather(this.itemEmbedding, idx1d); // [B, embDim]
-      if (!(this.deep && this.hiddenDim > 0)) return e; // baseline
-
-      let x = e;
-      if (this.itemFeatT) {
-        const f = tf.gather(this.itemFeatT, idx1d);   // [B, featDim]
-        x = tf.concat([e, f], 1);                     // [B, embDim+featDim]
+  // gather user embeddings -> [batch, embDim], then optional MLP
+  userForward(userIdxTensor){
+    return tf.tidy(()=> {
+      let x = tf.gather(this.userEmbedding, userIdxTensor.flatten());
+      if (this.uW1){
+        x = x.matMul(this.uW1).add(this.ub1).relu();
+        x = x.matMul(this.uW2).add(this.ub2);
       }
-      const h1 = tf.relu(tf.add(tf.matMul(x, this.iW1), this.ib1));   // [B, hidden]
-      const o  = tf.add(tf.matMul(h1, this.iW2), this.ib2);           // [B, embDim]
-      return o;
+      return x; // [B, embDim]
     });
   }
 
-  /* ---------- scoring ---------- */
-  score(uEmb, iEmb) {
-    // uEmb/iEmb: [B, embDim] -> returns [B] (diag of dot products)
-    return tf.tidy(() => {
-      const dots = tf.sum(tf.mul(uEmb, iEmb), -1); // [B]
-      return dots;
-    });
-  }
-
-  /* ---------- training step ---------- */
-  async trainStep(uIdx, posIdx) {
-    const lossVal = await this.opt.minimize(() => {
-      return tf.tidy(() => {
-        const uEmb = this.userForward(uIdx);   // [B, D]
-        const pEmb = this.itemForward(posIdx); // [B, D]
-
-        if (this.lossType === 'bpr') {
-          // BPR: sample negatives of same shape
-          const B = uIdx.shape[0];
-          const negIdx = tf.randomUniform([B], 0, this.numItems, 'int32');
-          const nEmb   = this.itemForward(negIdx);
-
-          const sp = this.score(uEmb, pEmb); // [B]
-          const sn = this.score(uEmb, nEmb); // [B]
-          const diff = tf.sub(sp, sn);       // [B]
-          const loss = tf.neg(tf.mean(tf.logSigmoid(diff))); // -mean(log σ(sp-sn)))
-          return loss;
-        }
-
-        // In-batch softmax: logits = U @ P^T, labels = identity
-        const logits = tf.matMul(uEmb, pEmb, false, true); // [B, B]
-        const labels = tf.eye(logits.shape[0]);            // [B, B]
-        const loss   = tf.losses.softmaxCrossEntropy(labels, logits).mean();
-        return loss;
-      });
-    }, /* returnCost= */ true);
-
-    const v = (await lossVal.data())[0];
-    lossVal.dispose();
-    return v;
-  }
-
-  /* ---------- inference ---------- */
-  getUserEmbedding(uIdxScalar) {
-    return tf.tidy(() => {
-      const u = tf.tensor1d([uIdxScalar], 'int32');
-      const e = this.userForward(u);     // [1, D]
-      const out = e.squeeze();           // [D]
-      const arr = out.dataSync();        // Float32Array
-      u.dispose(); e.dispose(); out.dispose();
-      return arr;
-    });
-  }
-
-  /** scores for all items for one user (returns Float32Array of length numItems) */
-  getScoresForAllItems(uIdxScalar) {
-    return tf.tidy(() => {
-      const u = tf.tensor1d([uIdxScalar], 'int32');    // [1]
-      const ue = this.userForward(u).squeeze();        // [D]
-
-      // Compute item tower outputs in batches to keep memory small
-      const B = 1024;
-      const scores = new Float32Array(this.numItems);
-      for (let i = 0; i < this.numItems; i += B) {
-        const end = Math.min(i + B, this.numItems);
-        const idx = tf.tensor1d([...Array(end - i)].map((_,k)=>i+k), 'int32'); // [b]
-        const ie  = this.itemForward(idx);                                     // [b, D]
-        const s   = tf.matMul(ie, ue.reshape([this.embDim, 1])).squeeze();     // [b]
-        const chunk = s.dataSync(); scores.set(chunk, i);
-        tf.dispose([idx, ie, s]);
+  // gather item embeddings -> [batch, embDim], then optional MLP
+  itemForward(itemIdxTensor){
+    return tf.tidy(()=> {
+      let y = tf.gather(this.itemEmbedding, itemIdxTensor.flatten());
+      if (this.iW1){
+        y = y.matMul(this.iW1).add(this.ib1).relu();
+        y = y.matMul(this.iW2).add(this.ib2);
       }
-
-      tf.dispose([u, ue]);
-      return scores;
+      return y;
     });
   }
 
-  /** All item tower outputs as a flat Float32Array [numItems * embDim] */
-  getAllItemEmbeddings() {
-    return tf.tidy(() => {
-      const out = new Float32Array(this.numItems * this.embDim);
-      const B = 1024;
-      for (let i = 0; i < this.numItems; i += B) {
-        const end = Math.min(i + B, this.numItems);
-        const idx = tf.tensor1d([...Array(end - i)].map((_,k)=>i+k), 'int32');
-        const emb = this.itemForward(idx); // [b, D]
-        const arr = emb.dataSync();
-        out.set(arr, i * this.embDim);
-        tf.dispose([idx, emb]);
+  // score by dot product between user and item vectors
+  score(uEmb, iEmb){
+    return tf.tidy(()=> tf.sum(tf.mul(uEmb, iEmb), -1)); // [B]
+  }
+
+  // one step of training; returns scalar loss (number)
+  async trainStep(uIdx, iPosIdx){
+    const uT = tf.tensor2d(uIdx, [uIdx.length,1], 'int32');
+    const pT = tf.tensor2d(iPosIdx, [iPosIdx.length,1], 'int32');
+
+    const lossFn = () => tf.tidy(()=>{
+      const U = this.userForward(uT);   // [B, D]
+      const I = this.itemForward(pT);   // [B, D]
+
+      if (this.opts.lossType === 'bpr'){
+        // sample negatives uniformly (in-batch could be used too)
+        const negIdx = tf.randomUniform([iPosIdx.length], 0, this.numItems, 'int32').reshape([iPosIdx.length,1]);
+        const INeg = this.itemForward(negIdx);
+        const sPos = this.score(U, I);     // [B]
+        const sNeg = this.score(U, INeg);  // [B]
+        const l = tf.neg(tf.logSigmoid(tf.sub(sPos, sNeg))); // -log(σ(pos-neg))
+        return tf.mean(l);
+      } else {
+        // In-batch sampled softmax:
+        // logits = U @ I^T  (shape [B,B]); labels are diagonal
+        const logits = tf.matMul(U, I, false, true); // [B,B]
+        const labels = tf.eye(logits.shape[0]);      // [B,B] one-hot
+        const loss = tf.losses.softmaxCrossEntropy(labels, logits);
+        return loss.mean ? loss.mean() : tf.mean(loss);
       }
-      return out;
     });
+
+    const lossVal = this.optimizer.minimize(lossFn, true, this.trainableVariables());
+    const val = (await lossVal.data())[0];
+    lossVal.dispose(); uT.dispose(); pT.dispose();
+    return val;
+  }
+
+  trainableVariables(){
+    const vars = [this.userEmbedding, this.itemEmbedding];
+    if (this.uW1) vars.push(this.uW1, this.ub1, this.uW2, this.ub2);
+    if (this.iW1) vars.push(this.iW1, this.ib1, this.iW2, this.ib2);
+    return vars;
+  }
+
+  getAllItemEmbeddings(){
+    // returns Float32Array length numItems*embDim of the *tower output* (after MLP if deep)
+    const allIdx = tf.range(0, this.numItems, 1, 'int32').reshape([this.numItems,1]);
+    const E = this.itemForward(allIdx); // [N,D]
+    const flat = E.dataSync().slice(); // copy out
+    E.dispose(); allIdx.dispose();
+    return new Float32Array(flat);
+  }
+
+  dispose(){
+    const vars = this.trainableVariables();
+    vars.forEach(v => v.dispose());
   }
 }
 
