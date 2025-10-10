@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Food Recommender — Two‑Tower + Graph (TF.js)</title>
+  <meta name="color-scheme" content="dark light">
+  <style>
+    :root{
+      --bg:#0f1623;--panel:#141c2b;--text:#e9eef8;--muted:#9fb0c9;
+      --border:#1c2946;--btn:#2a3347;--btnhl:#3a455f;--accent:#ef4444;
+      --green:#20c997;--red:#ff4d4f;--blue:#68a9ff;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:radial-gradient(1200px 600px at 70% -10%,#182238 8%,#0f1623 60%,#0f1623 100%);color:var(--text);font:15px/1.5 system-ui,Segoe UI,Roboto,Helvetica,Arial}
+    .wrap{max-width:1200px;margin:28px auto 64px;padding:0 18px}
+    h1{margin:0 0 4px;letter-spacing:.2px}
+    .muted{color:var(--muted)}
+    a{color:#9ecbff;text-decoration:none}
+    .tabs{display:flex;gap:8px;margin:14px 0 0;flex-wrap:wrap}
+    .tab{padding:8px 12px;border:1px solid var(--border);border-bottom:none;border-radius:10px 10px 0 0;background:#0f1321;cursor:pointer}
+    .tab.active{background:var(--panel)}
+    .panel{background:var(--panel);border:1px solid var(--border);border-radius:0 12px 12px 12px;box-shadow:0 8px 32px rgba(0,0,0,.35);padding:16px 18px;margin-top:-1px}
+    .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+    .control{display:flex;flex-direction:column;gap:6px}
+    label{font-size:.9rem;color:var(--muted)}
+    input[type=number],select{background:#0f1730;border:1px solid var(--border);color:var(--text);padding:10px;border-radius:8px;outline:none}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .btn{background:var(--btn);color:#fff;border:none;border-radius:8px;padding:10px 14px;cursor:pointer}
+    .btn:hover{background:var(--btnhl)}
+    .btn.danger{background:#c62828}.btn.danger:hover{background:#e23a3a}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+    .status{margin-left:12px;color:var(--muted)}
+    hr{border:none;border-top:1px solid var(--border);margin:12px 0}
+    .split{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    .t{width:100%;border-collapse:collapse;background:#0f1321;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+    .t th,.t td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:left}
+    .t th{background:#101830;color:var(--muted)}
+    .t tr:nth-child(even){background:#0e1222}
+    .caps{font-variant:all-small-caps;letter-spacing:.4px}
+    canvas{width:100%;height:300px;background:#0f1321;border:1px solid var(--border);border-radius:8px}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+    .legend{display:flex;gap:16px;align-items:center;font-size:.92rem;color:var(--muted);margin-top:6px}
+    .dot{width:10px;height:10px;border-radius:50%}
+    .dot.g{background:var(--green)} .dot.r{background:var(--red)}
+    @media (max-width:980px){.grid{grid-template-columns:repeat(2,1fr)} .split{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <h1>Food Recommender — Two‑Tower + Graph</h1>
+    <p class="muted">In‑browser training with TensorFlow.js. Baseline (ID embeddings) vs Deep (MLP + tags). Optional graph re‑rank with Personalized PageRank.</p>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="eda">EDA</button>
+      <button class="tab" data-tab="models">Models</button>
+      <button class="tab" data-tab="demo">Demo</button>
+      <button class="tab" data-tab="metrics">Metrics</button>
+    </nav>
+
+    <!-- EDA -->
+    <section id="eda" class="panel">
+      <div class="row">
+        <button id="loadBtn" class="btn danger">Load Data (from /data)</button>
+        <span id="status" class="status">Status: idle</span>
+      </div>
+      <hr/>
+      <div id="eda-summary" class="mono muted"></div>
+      <div class="split" style="margin-top:10px">
+        <div>
+          <h3>Ratings histogram</h3>
+          <canvas id="histRatings" width="960" height="300"></canvas>
+        </div>
+        <div>
+          <h3>Top 20 tags</h3>
+          <canvas id="topTags" width="960" height="300"></canvas>
+        </div>
+      </div>
+      <div class="split" style="margin-top:12px">
+        <div>
+          <h3>Popularity long‑tail (Lorenz)</h3>
+          <canvas id="lorenz" width="960" height="300"></canvas>
+        </div>
+        <div>
+          <h3>Cold‑start counts</h3>
+          <table class="t" id="coldTable">
+            <thead><tr><th>Bucket</th><th>Count</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Models -->
+    <section id="models" class="panel" hidden>
+      <div class="grid">
+        <div class="control"><label>Max interactions (train)</label><input id="maxInt" type="number" value="250000" min="10000" step="10000"></div>
+        <div class="control"><label>Max items (cap)</label><input id="maxItems" type="number" value="30000" min="1000" step="1000"></div>
+        <div class="control"><label>Embedding dim</label><input id="embDim" type="number" value="48" min="16" step="1"></div>
+        <div class="control"><label>Hidden dim (deep)</label><input id="hiddenDim" type="number" value="96" min="0" step="1"></div>
+
+        <div class="control"><label>Batch size</label><input id="batchSize" type="number" value="256" min="32" step="32"></div>
+        <div class="control"><label>Epochs</label><input id="epochs" type="number" value="4" min="1" step="1"></div>
+        <div class="control"><label>Learning rate</label><input id="lr" type="number" value="0.003" step="0.001" min="0.0001"></div>
+        <div class="control"><label>Loss</label>
+          <select id="lossSel"><option>In-batch softmax</option><option>BPR pairwise</option></select>
+        </div>
+
+        <div class="control"><label>Use tags in deep tower?</label>
+          <select id="useTags"><option>Yes</option><option>No</option></select>
+        </div>
+        <div class="control"><label>Tag hash dim</label><input id="tagDim" type="number" value="128" min="32" step="32"></div>
+        <div class="control"><label>Train baseline too?</label>
+          <select id="compare"><option>Yes (compare)</option><option>No (deep only)</option></select>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <button id="trainBtn" class="btn" disabled>Train</button>
+        <span id="trainStatus" class="status">Model: not trained</span>
+      </div>
+
+      <div class="split" style="margin-top:12px">
+        <div>
+          <h3>Training loss (per batch)</h3>
+          <canvas id="lossCanvas" width="960" height="300"></canvas>
+          <div class="legend"><span class="dot g"></span> Baseline <span class="dot r"></span> Deep</div>
+        </div>
+        <div>
+          <h3>Item embedding projection (PCA sample)</h3>
+          <canvas id="pcaCanvas" width="960" height="300"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- Demo -->
+    <section id="demo" class="panel" hidden>
+      <div class="row">
+        <label class="muted">User:</label>
+        <select id="userSelect" disabled>
+          <option value="">— select —</option>
+        </select>
+
+        <label class="muted">Graph re‑rank?</label>
+        <select id="graphOn"><option>Off</option><option>On</option></select>
+
+        <label class="muted" title="weight added to PPR score">β PPR:</label>
+        <input id="betaPPR" type="number" value="0.30" min="0" max="1" step="0.05" style="width:90px">
+
+        <label class="muted" title="novelty = 1 - cosine(profile,item)">γ novelty:</label>
+        <input id="gammaNov" type="number" value="0.15" min="0" max="1" step="0.05" style="width:90px">
+
+        <button id="recBtn" class="btn" disabled>Recommend Top‑10</button>
+        <span id="demoStatus" class="status">Ready after training</span>
+      </div>
+
+      <div class="split" style="margin-top:12px">
+        <div>
+          <h3>Top‑10 Rated (historical)</h3>
+          <table class="t" id="histTable"><thead><tr><th>#</th><th>Recipe</th></tr></thead><tbody></tbody></table>
+        </div>
+        <div>
+          <h3>Top‑10 Recommended</h3>
+          <table class="t" id="recTable"><thead><tr><th>#</th><th>Baseline</th><th>Deep</th><th>Deep+Graph</th></tr></thead><tbody></tbody></table>
+          <p class="muted">Deep+Graph shown when Graph re‑rank = On.</p>
+        </div>
+      </div>
+
+      <h3 style="margin-top:14px">Why these?</h3>
+      <div id="whyBox" class="mono muted"></div>
+    </section>
+
+    <!-- Metrics -->
+    <section id="metrics" class="panel" hidden>
+      <div class="row">
+        <button id="evalBtn" class="btn" disabled>Compute Offline Metrics (K=10)</button>
+        <span id="metricStatus" class="status">Needs validation/test split</span>
+      </div>
+      <hr/>
+      <table class="t" id="metricTable">
+        <thead><tr><th>Model</th><th>HitRate@10</th><th>Recall@10</th><th>NDCG@10</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <hr/>
+      <h3>Head/Mid/Tail breakdown (by item popularity)</h3>
+      <table class="t" id="metricBuckets">
+        <thead><tr><th>Bucket</th><th>HitRate@10</th><th>Recall@10</th><th>NDCG@10</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </main>
+
+  <!-- Libraries / App -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+  <script src="./two-tower.js"></script>
+  <script src="./graph.js"></script>
+  <script src="./app.js"></script>
+
+  <script>
+    // Simple tab system
+    const tabs = document.querySelectorAll('.tab');
+    const sections = { eda:document.getElementById('eda'), models:document.getElementById('models'), demo:document.getElementById('demo'), metrics:document.getElementById('metrics') };
+    tabs.forEach(t => t.addEventListener('click', () => {
+      tabs.forEach(x=>x.classList.remove('active')); t.classList.add('active');
+      Object.values(sections).forEach(s=>s.hidden = true);
+      sections[t.dataset.tab].hidden = false;
+    }));
+  </script>
+</body>
+</html>
