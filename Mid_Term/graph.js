@@ -1,97 +1,73 @@
-/* graph.js — simple co-vis graph and Personalized PageRank
-   Build an item-item graph: edges weighted by co-occurrence within same user.
-   Use it to optionally re-rank recommender scores with PPR from the user’s history.
-*/
+/* graph.js – simple co-visitation graph + Personalized PageRank */
 
-let GRAPH = null; // Map itemIdx -> Map neighborIdx -> weight
-let GRAPH_N = 0;
-
-function ensureGraph(INTERACTIONS){
-  if (GRAPH) return GRAPH;
-  GRAPH = new Map();
-  // Build by user windows (small memory footprint)
-  const byUser = new Map();
-  for(const x of INTERACTIONS){
-    if(!byUser.has(x.userId)) byUser.set(x.userId, []);
-    byUser.get(x.userId).push(x.itemId);
+function buildItemGraph(user2items){
+  // Undirected weighted graph over items: weight = co-occurrence count across users
+  const G = new Map(); // itemId -> Map(itemId -> w)
+  function bump(a,b){
+    if (a===b) return;
+    if (!G.has(a)) G.set(a,new Map());
+    const m = G.get(a); m.set(b, (m.get(b)||0)+1);
   }
-  for(const arr of byUser.values()){
-    // use set to reduce self duplicates
-    const uniq = Array.from(new Set(arr));
-    for(let a=0;a<uniq.length;a++){
-      for(let b=a+1;b<uniq.length;b++){
-        addEdge(uniq[a], uniq[b], 1);
+  for (const [,arr] of user2items){
+    const items = Array.from(new Set(arr.map(x=>x.i))); // unique
+    for (let i=0;i<items.length;i++){
+      for (let j=i+1;j<items.length;j++){
+        bump(items[i], items[j]); bump(items[j], items[i]);
       }
     }
   }
-  GRAPH_N = new Set([].concat(...Array.from(GRAPH.keys()))).size;
-  return GRAPH;
-
-  function addEdge(itemAId, itemBId, w){
-    const A = window.item2idx.get(itemAId);
-    const B = window.item2idx.get(itemBId);
-    if (A==null || B==null || A===B) return;
-    if(!GRAPH.has(A)) GRAPH.set(A, new Map());
-    if(!GRAPH.has(B)) GRAPH.set(B, new Map());
-    GRAPH.get(A).set(B, (GRAPH.get(A).get(B)||0) + w);
-    GRAPH.get(B).set(A, (GRAPH.get(B).get(A)||0) + w);
+  // degree-normalize into transition probabilities
+  for (const [u, nbr] of G){
+    let s=0; for (const w of nbr.values()) s+=w;
+    if (s>0){ for (const k of nbr.keys()) nbr.set(k, nbr.get(k)/s); }
   }
+  return G;
 }
 
-/* Personalized PageRank using power iteration.
-   seeds: array of itemIds (history)
-   returns Map idx->score
-*/
-function personalizedPageRank(seeds, alpha=0.15, iters=30){
-  if(!GRAPH) return new Map();
-  const M = window.idx2item.length;
-  const v = new Float32Array(M); // personalization
-  const seedIdx = seeds.map(id=>window.item2idx.get(id)).filter(i=>i!=null);
-  if (!seedIdx.length) return new Map();
-  const mass = 1/seedIdx.length;
-  for(const s of seedIdx){ v[s]=mass; }
+// Cache built graph (rebuild only once per session)
+let _graphCache = null;
 
-  // degree
-  const deg = new Float32Array(M);
-  for(const [i,nb] of GRAPH){
-    let sum=0; for(const [,w] of nb) sum+=w;
-    deg[i]=sum||1;
-  }
+function personalizedPageRankForUser(u, user2items, item2users, {alpha=0.15,iters=20}={}){
+  if (!_graphCache) _graphCache = buildItemGraph(user2items);
+  const G = _graphCache;
 
-  // iterate: r_{t+1} = alpha*v + (1-alpha)*P^T r_t
-  let r = v.slice();
-  for(let t=0;t<iters;t++){
-    const r2 = new Float32Array(M);
-    for(const [i,nb] of GRAPH){
-      const ri = r[i];
-      if(ri===0) continue;
-      for(const [j,w] of nb){
-        r2[j] += (1-alpha) * ri * (w/deg[i]);
+  // seed vector over items seen by user u
+  const seen = new Set((user2items.get(u)||[]).map(x=>x.i));
+  if (!seen.size) return new Map();
+
+  // map itemId -> index in vector
+  const nodes = Array.from(G.keys());
+  const idx = new Map(nodes.map((id,i)=>[id,i]));
+
+  const n = nodes.length;
+  const p = new Float32Array(n); // personalization
+  for (const id of seen){ if (idx.has(id)) p[idx.get(id)] = 1/seen.size; }
+
+  // rank vector
+  let r = new Float32Array(n); r.set(p);
+
+  // power iteration: r_{t+1} = (1-α) * P^T r_t + α p
+  for (let t=0;t<iters;t++){
+    const next = new Float32Array(n);
+    // push mass along edges
+    for (let a=0;a<n;a++){
+      const mass = (1-alpha) * r[a];
+      const nbr = G.get(nodes[a]);
+      if (!nbr) continue;
+      for (const [b,w] of nbr.entries()){
+        const bi = idx.get(b);
+        next[bi] += mass * w;
       }
     }
-    for(let k=0;k<M;k++) r2[k] += alpha * v[k];
-    r = r2;
+    // restart
+    for (let i=0;i<n;i++) next[i]+= alpha * p[i];
+    r = next;
   }
+
+  // back to map itemId -> score
   const out = new Map();
-  for(let i=0;i<M;i++) if(r[i]>0) out.set(i, r[i]);
+  for (let i=0;i<n;i++){ if (r[i]>0) out.set(nodes[i], r[i]); }
   return out;
 }
 
-/* Combine base scores with PPR: score' = (1-l)*score + l*norm(ppr) */
-function rerankWithGraph(base, ppr, lambda=0.3){
-  if(!base.length) return base;
-  const maxBase = Math.max(...base.map(x=>x.score)) || 1;
-  const maxPPR = Math.max(1e-9, ...Array.from(ppr.values()));
-  const m = new Map(base.map(x=>[x.idx, x.score/maxBase]));
-  const out = base.map(x=>{
-    const s = (1-lambda)*(m.get(x.idx)||0) + lambda*((ppr.get(x.idx)||0)/maxPPR);
-    return {idx:x.idx, score:s};
-  });
-  out.sort((a,b)=>b.score-a.score);
-  return out;
-}
-
-// expose
-window.ensureGraph = ensureGraph;
-window.personalizedPageRank = personalizedPageRank;
-window.rerankWithGraph = rerankWithGraph;
+window.personalizedPageRankForUser = personalizedPageRankForUser;
