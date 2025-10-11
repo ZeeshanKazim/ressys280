@@ -1,8 +1,4 @@
-/* app.js – data loading, charts, training, demo, metrics
-   Robust to files in "/" or "/data/". Works with:
-   - PP_recipes.csv (preferred) or RAW_recipes.csv
-   - interactions_train.csv
-*/
+/* app.js – data loading, charts, training, demo, metrics (robust to / or /data/) */
 
 // --------- tiny DOM helpers ----------
 const $ = (id) => document.getElementById(id);
@@ -51,6 +47,7 @@ async function fetchFirstExisting(candidates) {
   }
   return null;
 }
+
 function splitLines(text){ return text.split(/\r?\n/).filter(Boolean); }
 
 // Recipes: id + title/name + tags (python-list style string)
@@ -60,55 +57,44 @@ function parseRecipes(csvText){
   const idIdx = header.findIndex(h => /^id$|(^|_)id$/i.test(h));
   const nameIdx = header.findIndex(h => /(name|title)/i.test(h));
   const tagsIdx = header.findIndex(h => /tags/i.test(h));
-
-  items.clear();
   for (const ln of lines){
     const cols = ln.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/g);
     const id = parseInt(cols[idIdx],10);
-    if (!Number.isInteger(id)) continue;
-
-    let title = (cols[nameIdx]||`Recipe ${id}`).trim();
-    if (title.startsWith('"') && title.endsWith('"')) title = title.slice(1,-1);
-
-    // tags: "['a', 'b']" or '"['a', 'b']"' variants
+    if (Number.isNaN(id)) continue;
+    const rawTitle = cols[nameIdx] ?? `Recipe ${id}`;
+    // Remove outer quotes only; keep commas inside quoted names
+    const title = rawTitle.replace(/^"|"$/g,'');
     let tags = [];
     if (tagsIdx >= 0 && cols[tagsIdx]){
       let raw = cols[tagsIdx].trim();
-      // Strip outer quotes, brackets, then split by comma
-      raw = raw.replace(/^"+|"+$/g, '').replace(/^\s*\[|\]\s*$/g,"");
+      // handle "['a', 'b']" or JSON-like
+      raw = raw.replace(/^\s*\[|\]\s*$/g,"");
       tags = raw.split(/['"]\s*,\s*['"]|,\s*/g)
                 .map(s=>s.replace(/^\s*['"]?|['"]?\s*$/g,'').trim())
                 .filter(Boolean)
-                .slice(0, 32);
+                .slice(0, 24);
     }
     items.set(id, {title, tags});
   }
 }
 
-// Interactions: supports headers with user_id, recipe_id / item_id, rating, date/time
+// Interactions: supports various headers
 function parseInteractions(csvText, sink){
   const lines = splitLines(csvText);
   if (!lines.length) return;
   const header = lines.shift().split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/g);
-  const uIdx = header.findIndex(h=>/user/.test(h));
+  // NB: 'user' is intentionally case-sensitive lower here (food.com files are lowercase)
+  const uIdx = header.findIndex(h=>/user/i.test(h));
   const iIdx = header.findIndex(h=>/(item|recipe)_?id/i.test(h));
   const rIdx = header.findIndex(h=>/rating/i.test(h));
   const tIdx = header.findIndex(h=>/(time|date)/i.test(h));
-
   for (const ln of lines){
     const cols = ln.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/g);
     const u = parseInt(cols[uIdx],10);
     const i = parseInt(cols[iIdx],10);
     if (!Number.isInteger(u) || !Number.isInteger(i)) continue;
-
     const r = rIdx>=0 && cols[rIdx] !== '' ? parseFloat(cols[rIdx]) : 1;
-    // timestamp: supports numeric or ISO date
-    let ts = 0;
-    if (tIdx>=0 && cols[tIdx] !== '') {
-      const maybeNum = Number(cols[tIdx]);
-      ts = Number.isFinite(maybeNum) ? maybeNum : (Date.parse(cols[tIdx]) || 0);
-    }
-
+    const ts = tIdx>=0 ? (Date.parse(cols[tIdx]) || 0) : 0;
     sink.push({u,i,r,ts});
     users.add(u);
     if (!user2items.has(u)) user2items.set(u,[]);
@@ -140,17 +126,16 @@ async function handleLoad(){
   try{
     $('status').textContent = 'Status: loading…';
 
-    // Try local folder first, then ./data/
+    // Try local folder first (same folder as index.html), then a nested ./data/
     const tried = {
-      recipes: [
-        './PP_recipes.csv','PP_recipes.csv','data/PP_recipes.csv',
-        './RAW_recipes.csv','RAW_recipes.csv','data/RAW_recipes.csv'
-      ],
-      train:   ['./interactions_train.csv','interactions_train.csv','data/interactions_train.csv']
+      recipes: ['./PP_recipes.csv','./RAW_recipes.csv','PP_recipes.csv','RAW_recipes.csv','data/PP_recipes.csv','data/RAW_recipes.csv'],
+      train:   ['./interactions_train.csv','./interactions.csv','interactions_train.csv','interactions.csv','data/interactions_train.csv','data/interactions.csv'],
+      valid:   ['./interactions_validation.csv','interactions_validation.csv','data/interactions_validation.csv']
     };
 
     const rec = await fetchFirstExisting(tried.recipes);
     const tr  = await fetchFirstExisting(tried.train);
+    const va  = await fetchFirstExisting(tried.valid); // optional
 
     if (!rec || !tr) throw new Error('recipes or interactions_train not found near index.html');
 
@@ -160,9 +145,10 @@ async function handleLoad(){
 
     parseRecipes(rec.text);
     parseInteractions(tr.text, train);
+    if (va) parseInteractions(va.text, valid);
 
-    // 80/20 time-aware split
-    if (train.length){
+    // If no validation split, make a fast 80/20 time-aware split
+    if (!valid.length && train.length){
       const sorted = train.slice().sort((a,b)=>a.ts-b.ts);
       valid = sorted.filter((_,ix)=> ix%5===0);       // 20%
       train = sorted.filter((_,ix)=> ix%5!==0);
@@ -172,15 +158,17 @@ async function handleLoad(){
     buildTagVocab(parseInt(($('dK')?.value||'200'),10));
 
     const density = (train.length / (users.size * Math.max(1, items.size))).toExponential(2);
-    const coldUsers = Array.from(user2items.entries()).filter(([,arr])=>arr.length<5).length;
-    const icnt = new Map(); for (const r of train){ icnt.set(r.i,(icnt.get(r.i)||0)+1); }
-    const coldItems = Array.from(items.keys()).filter(i=>!icnt.has(i) || icnt.get(i)<5).length;
+    // cold users/items <5, computed over all interactions we loaded (user2items / item2users)
+    const coldUsers = Array.from(user2items.values()).filter(arr=>arr.length<5).length;
+    const itemCounts = new Map();
+    for (const r of train){ itemCounts.set(r.i,(itemCounts.get(r.i)||0)+1); }
+    const coldItems = Array.from(itemCounts.values()).filter(c=>c<5).length;
 
     $('datasetLine').textContent =
       `Users: ${fmt(users.size)} Items: ${fmt(items.size)} Interactions (train): ${fmt(train.length)} `+
       `Density: ${density} Ratings present: ${train.some(x=>x.r!=null) ? 'yes':'no'} `+
       `Cold users (<5): ${fmt(coldUsers)} Cold items (<5): ${fmt(coldItems)} `+
-      `(files: ${rec.path}, ${tr.path})`;
+      `(files: ${rec.path}, ${tr.path}${va?`, ${va.path}`:''})`;
     $('status').textContent = 'Status: loaded.';
     drawAllEDA();
   }catch(err){
@@ -193,6 +181,7 @@ async function handleLoad(){
 function clearCanvas(ctx){
   const c = ctx.canvas;
   const dpr = window.devicePixelRatio || 1;
+  // reset transform by reassigning width/height
   const w = c.clientWidth, h = c.clientHeight;
   c.width = Math.max(1, w * dpr);
   c.height = Math.max(1, h * dpr);
@@ -200,15 +189,17 @@ function clearCanvas(ctx){
   ctx.scale(dpr,dpr);
   ctx.clearRect(0,0,w,h);
 }
+
 function drawBars(id, buckets, maxVal){
   const ctx = $(id).getContext('2d'); clearCanvas(ctx);
   const W = ctx.canvas.clientWidth, H = ctx.canvas.clientHeight;
-  const pad = 28, bw = (W-pad*2)/Math.max(1,buckets.length)-6, base = H-pad;
+  const pad = 28, bw = (W-pad*2)/buckets.length-6, base = H-pad;
   const scale = (v)=> (maxVal? (v/maxVal) : 0) * (H-pad*2);
   ctx.strokeStyle = "#223047"; ctx.beginPath(); ctx.moveTo(pad,base+0.5); ctx.lineTo(W-pad,base+0.5); ctx.stroke();
   ctx.fillStyle = "#ffffff";
   buckets.forEach((v,i)=>{ const h = scale(v); const x = pad + i*(bw+6); ctx.fillRect(x, base - h, bw, h); });
 }
+
 function drawLine(id, points){
   const ctx = $(id).getContext('2d'); clearCanvas(ctx);
   const W = ctx.canvas.clientWidth, H = ctx.canvas.clientHeight;
@@ -223,30 +214,7 @@ function drawLine(id, points){
   for (let k=1;k<points.length;k++){ ctx.lineTo(sx(points[k].x), sy(points[k].y)); }
   ctx.stroke();
 }
-function giniFromCounts(countsAsc){
-  // countsAsc: nonnegative, ascending
-  const n = countsAsc.length;
-  if (!n) return 0;
-  const total = countsAsc.reduce((s,v)=>s+v,0);
-  if (total === 0) return 0;
 
-  // Lorenz points include (0,0) and (1,1)
-  let cum = 0;
-  const X = [], Y = [];
-  X.push(0); Y.push(0);
-  for (let i=0;i<n;i++){
-    cum += countsAsc[i];
-    X.push((i+1)/n);
-    Y.push(cum/total);
-  }
-  // Area under curve via trapezoids
-  let area = 0;
-  for (let i=0;i<X.length-1;i++){
-    area += 0.5 * (Y[i] + Y[i+1]) * (X[i+1] - X[i]);
-  }
-  const gini = 1 - 2*area;
-  return Math.max(0, Math.min(1, gini));
-}
 function drawAllEDA(){
   if (!train.length){ return; }
   // ratings
@@ -280,24 +248,22 @@ function drawAllEDA(){
   const top20 = Array.from(freq.entries()).sort((a,b)=>b[1]-a[1]).slice(0,20);
   drawBars('topTags', top20.map(([,c])=>c), Math.max(1,...top20.map(([,c])=>c)));
 
-  // lorenz + gini (proper)
+  // lorenz + gini
   const counts = Array.from(icnt.values()).sort((a,b)=>a-b);
+  const total = counts.reduce((s,v)=>s+v,0) || 1;
+  let acc=0; const lor = counts.map(v=>{ acc+=v; return acc/total; });
   const ctx = $('lorenz').getContext('2d'); clearCanvas(ctx);
   const W = ctx.canvas.clientWidth, H = ctx.canvas.clientHeight, pad=24;
-  // diagonal
   ctx.strokeStyle="#334155"; ctx.beginPath(); ctx.moveTo(pad,H-pad); ctx.lineTo(W-pad,pad); ctx.stroke();
-  // lorenz
-  const total = counts.reduce((s,v)=>s+v,0) || 1;
-  let acc=0;
   ctx.strokeStyle="#22d3ee"; ctx.beginPath();
-  for (let i=0;i<counts.length;i++){
-    acc += counts[i];
-    const x = pad + ((i+1)/counts.length)*(W-pad*2);
-    const y = H-pad - (acc/total)*(H-pad*2);
-    if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-  }
+  counts.forEach((_,i)=>{
+    const x = pad + (i/(counts.length-1||1))*(W-pad*2);
+    const y = H-pad - lor[i]*(H-pad*2);
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  });
   ctx.stroke();
-  $('giniLine').textContent = `Gini ≈ ${giniFromCounts(counts).toFixed(3)}`;
+  const gini = 1 - 2 * lor.reduce((s,y,i)=> s + y/(counts.length||1), 0) / (counts.length||1);
+  $('giniLine').textContent = `Gini ≈ ${gini.toFixed(3)}`;
 
   // cold-start table
   const coldUsers = userBuckets[0] + userBuckets[1];
@@ -316,8 +282,10 @@ function drawAllEDA(){
 function buildBatchTensors(batch){
   const u = tf.tensor1d(batch.map(x=>userIndex.get(x.u)), 'int32');
   const i = tf.tensor1d(batch.map(x=>itemIndex.get(x.i)), 'int32');
-  return {u,i};
+  const r = tf.tensor1d(batch.map(x=>x.r??1), 'float32');
+  return {u,i,r};
 }
+
 function itemTagVector(iIdx){
   const itemId = idx2item[iIdx];
   const obj = items.get(itemId);
@@ -332,6 +300,7 @@ function itemTagVector(iIdx){
   return vec;
 }
 function hashStr(s){ let h=0; for (let i=0;i<s.length;i++){ h=(h*31 + s.charCodeAt(i))|0; } return h>>>0; }
+
 function makeShuffled(arr, maxN){
   const A = maxN ? arr.slice(0, maxN) : arr.slice();
   for (let i=A.length-1;i>0;i--){ const j = (Math.random()* (i+1))|0; [A[i],A[j]]=[A[j],A[i]]; }
@@ -340,11 +309,8 @@ function makeShuffled(arr, maxN){
 
 // --------- Training: Baseline ----------
 async function trainBaseline(){
-  if (!users.size || !items.size || !train.length){
-    $('baseLine').textContent = 'Load data first.';
-    return;
-  }
-  baseline?.dispose(); baseline=null;
+  if (!users.size) return;
+  if (baseline) { baseline.dispose(); baseline=null; }
   lastItemEmb?.dispose?.(); lastItemEmb=null;
   baseLossTrace = []; drawLine('baseLoss', baseLossTrace);
 
@@ -363,9 +329,9 @@ async function trainBaseline(){
   let step=0;
   for (let ep=0; ep<epochs; ep++){
     for (let b=0; b<data.length; b+=batch){
-      const slice = data.slice(b, Math.min(b+batch, data.length));
+      const slice = data.slice(b, b+batch);
       const {u,i} = buildBatchTensors(slice);
-      const loss = baseline.trainStep(u,i);
+      const loss = await baseline.trainStep(u,i);
       u.dispose(); i.dispose();
       baseLossTrace.push({x: ++step, y: loss});
       if (step%5===0) drawLine('baseLoss', baseLossTrace);
@@ -373,18 +339,15 @@ async function trainBaseline(){
     }
   }
   $('baseLine').innerHTML = `Baseline done. Final loss <b>${baseLossTrace.at(-1).y.toFixed(4)}</b>`;
-  lastItemEmb = baseline.readItemEmbedding();
+  lastItemEmb = baseline.itemEmbedding.read();
   drawProjection(lastItemEmb);
   computeAndShowMetrics().catch(console.error);
 }
 
 // --------- Training: Deep (tags -> MLP) ----------
 async function trainDeepModel(){
-  if (!users.size || !items.size || !train.length){
-    $('deepLine').textContent = 'Load data first.';
-    return;
-  }
-  deep?.dispose(); deep=null;
+  if (!users.size) return;
+  if (deep) { deep.dispose(); deep=null; }
   lastItemEmbDeep?.dispose?.(); lastItemEmbDeep=null;
   deepLossTrace = []; drawLine('deepLoss', deepLossTrace);
 
@@ -398,7 +361,6 @@ async function trainDeepModel(){
   $('deepLine').textContent = 'Training deep…';
   const data = makeShuffled(train, parseInt($('bMax').value,10));
 
-  // Dense tag matrix for all items
   const itemTagMat = tf.tensor2d(
     idx2item.map((_,iIdx)=> itemTagVector(iIdx) ),
     [idx2item.length, topTagK],
@@ -411,9 +373,9 @@ async function trainDeepModel(){
   let step=0;
   for (let ep=0; ep<epochs; ep++){
     for (let b=0; b<data.length; b+=batch){
-      const slice = data.slice(b, Math.min(b+batch, data.length));
+      const slice = data.slice(b, b+batch);
       const {u,i} = buildBatchTensors(slice);
-      const loss = deep.trainStep(u,i);
+      const loss = await deep.trainStep(u,i);
       u.dispose(); i.dispose();
       deepLossTrace.push({x: ++step, y: loss});
       if (step%5===0) drawLine('deepLoss', deepLossTrace);
@@ -435,24 +397,16 @@ function powerIter(M, v, iters=20){
 }
 function drawProjection(itemEmb){
   if (!itemEmb) return;
-  // Subsample for speed if huge
-  const N = itemEmb.shape[0];
-  const take = Math.min(N, 1500);
-  const sel = [];
-  const step = Math.max(1, Math.floor(N/take));
-  for (let i=0;i<N;i+=step) sel.push(i);
-  const idx = tf.tensor1d(sel, 'int32');
-  const X = tf.gather(itemEmb, idx);       // [n,D]
-
-  const XT = X.transpose();                // [D,n]
-  const C = XT.matMul(X);                  // [D,D]
+  const X = itemEmb;                 // [N,D]
+  const XT = X.transpose();          // [D,N]
+  const C = XT.matMul(X);            // [D,D]
   const v0 = tf.randomNormal([C.shape[0],1]);
   const v1 = powerIter(C, v0, 20);
   const w0 = tf.randomNormal([C.shape[0],1]);
-  const C2 = C.sub(v1.matMul(v1.transpose()).matMul(C).matMul(v1).matMul(v1.transpose()));
+  const C2 = C.sub(v1.matMul(v1.transpose()).mul(C.matMul(v1).transpose().matMul(v1)));
   const v2 = powerIter(C2, w0, 20);
-  const P = tf.concat([v1,v2],1);          // [D,2]
-  const Y = X.matMul(P);                   // [n,2]
+  const P = tf.concat([v1,v2],1);    // [D,2]
+  const Y = X.matMul(P);             // [N,2]
 
   const arr = Array.from(Y.dataSync());
   const coords = []; for (let i=0;i<arr.length;i+=2) coords.push({x:arr[i], y:arr[i+1]});
@@ -463,56 +417,89 @@ function drawProjection(itemEmb){
   const ctx = $('proj').getContext('2d'); clearCanvas(ctx);
   const W = ctx.canvas.clientWidth, H = ctx.canvas.clientHeight, pad=10;
   ctx.fillStyle = "#cbd5e1";
-  norm.forEach(p=>{
+  norm.slice(0,1000).forEach(p=>{
     const x = pad + p.x*(W-pad*2);
     const y = pad + (1-p.y)*(H-pad*2);
     ctx.fillRect(x,y,2,2);
   });
 
-  idx.dispose(); X.dispose(); XT.dispose(); C.dispose(); v0.dispose(); v1.dispose();
-  w0.dispose(); C2.dispose(); v2.dispose(); P.dispose(); Y.dispose();
+  v0.dispose(); v1.dispose(); w0.dispose(); v2.dispose(); P.dispose(); XT.dispose(); C.dispose(); C2.dispose(); Y.dispose();
 }
 
-// --------- Demo ----------
+// --------- Demo (hardened) ----------
+
+// pick a user meeting minRatings from the full user2items map,
+// fall back to the user with the maximum history if none meets it.
 function pickUserForDemo(minRatings){
-  // choose among users with >= minRatings; fallback to max activity
-  const counts = new Map(); for (const r of train) counts.set(r.u,(counts.get(r.u)||0)+1);
-  const candidates = Array.from(counts.entries()).filter(([,c])=>c>=minRatings).map(([u])=>u);
-  if (!candidates.length){
-    const maxC = Math.max(0, ...counts.values());
-    const fallback = Array.from(counts.entries()).filter(([,c])=>c===maxC).map(([u])=>u);
-    return {user: fallback[(Math.random()*fallback.length)|0], usedMin:maxC};
+  const eligible = [];
+  let bestU = null, bestC = 0;
+  for (const [u, arr] of user2items.entries()){
+    const c = arr.length;
+    if (c >= minRatings) eligible.push(u);
+    if (c > bestC){ bestC = c; bestU = u; }
   }
-  return {user: candidates[(Math.random()*candidates.length)|0], usedMin:minRatings};
+  if (eligible.length){
+    return { user: eligible[Math.floor(Math.random()*eligible.length)], usedMin: minRatings };
+  }
+  // fallback — show the best we can find
+  return { user: bestU, usedMin: bestC };
+}
+
+function setEmpty(tblId, msg='—'){
+  $(tblId).innerHTML = `<tr><td class="muted" colspan="3">${msg}</td></tr>`;
 }
 
 async function demoOnce(){
-  try{
-    if (!baseline && !deep) {
-      $('demoLine').textContent = 'Train a model first (baseline or deep).';
-      // also clear tables to visible empty-state
-      $('histTbl').innerHTML = `<tr><td class="muted" colspan="3">—</td></tr>`;
-      $('baseTbl').innerHTML = `<tr><td class="muted" colspan="3">—</td></tr>`;
-      $('deepTbl').innerHTML = `<tr><td class="muted" colspan="3">—</td></tr>`;
-      return;
-    }
-    const reqMin = parseInt($('minRatings').value,10);
-    const picked = pickUserForDemo(reqMin);
-    const u = picked.user;
-    $('demoLine').textContent = `Testing with user ${u} (threshold used: ${picked.usedMin}).`;
+  if (!baseline && !deep) {
+    $('demoLine').textContent = 'Train a model first (baseline or deep).';
+    setEmpty('histTbl','—');
+    setEmpty('baseTbl','—');
+    setEmpty('deepTbl','—');
+    return;
+  }
+  const reqMin = parseInt($('minRatings').value,10) || 1;
 
-    // history
-    const historyAll = (user2items.get(u)||[]).slice();
-    const hist = historyAll.sort((a,b)=> (b.r-a.r) || (b.ts-a.ts)).slice(0,10);
-    $('histTbl').innerHTML = hist.length
-      ? hist.map((row,idx)=>(`<tr><td>${idx+1}</td><td>${escapeHtml(items.get(row.i)?.title||String(row.i))}</td><td>${row.r??''}</td></tr>`)).join('')
-      : `<tr><td class="muted" colspan="3">— no history —</td></tr>`;
+  // Try a few times to find a user who both has history AND at least one unseen item
+  let picked = pickUserForDemo(reqMin);
+  let tries = 8;
+  while (tries-- > 0) {
+    const histArr = user2items.get(picked.user) || [];
+    const seen = new Set(histArr.map(x=>x.i));
+    if (histArr.length && seen.size < idx2item.length) break; // ok
+    // else pick again
+    picked = pickUserForDemo(picked.usedMin);
+  }
 
-    const seen = new Set(historyAll.map(x=>x.i));
-    const candIdx = idx2item.map((iid,ii)=> ({iid,ii})).filter(x=>!seen.has(x.iid)).map(x=>x.ii);
+  const u = picked.user;
+  $('demoLine').textContent = `Testing with user ${u} (threshold used: ${picked.usedMin}).`;
 
-    const uIdx = tf.tensor1d([userIndex.get(u)], 'int32');
-    let baseScores=[], deepScores=[];
+  const histArr = (user2items.get(u)||[]).slice();
+  if (!histArr.length){
+    setEmpty('histTbl','no history for chosen user');
+    setEmpty('baseTbl','no unseen items / no history');
+    setEmpty('deepTbl','no unseen items / no history');
+    return;
+  }
+
+  const hist = histArr.sort((a,b)=> (b.r-a.r) || (b.ts-a.ts)).slice(0,10);
+  $('histTbl').innerHTML = hist.map((row,idx)=>(
+    `<tr><td>${idx+1}</td><td>${escapeHtml(items.get(row.i)?.title||String(row.i))}</td><td>${row.r??''}</td></tr>`
+  )).join('');
+
+  const seen = new Set(histArr.map(x=>x.i));
+  const candIdx = idx2item.map((iid,ii)=> ({iid,ii})).filter(x=>!seen.has(x.iid)).map(x=>x.ii);
+
+  // If there are no candidates, show placeholders and stop early
+  if (!candIdx.length){
+    setEmpty('baseTbl','no unseen items for this user');
+    setEmpty('deepTbl','no unseen items for this user');
+    return;
+  }
+
+  const uIdx = tf.tensor1d([userIndex.get(u)], 'int32');
+  let baseScores=[], deepScores=[];
+
+  try {
     if (baseline){
       const s = await baseline.scoreUserAgainstAll(uIdx);
       baseScores = Array.from(s.dataSync());
@@ -523,39 +510,34 @@ async function demoOnce(){
       deepScores = Array.from(s.dataSync());
       s.dispose();
     }
+  } finally {
     uIdx.dispose();
-
-    if ($('useGraph').checked && candIdx.length){
-      const pr = personalizedPageRankForUser(u, user2items, item2users, {alpha:0.15, iters:20});
-      const lambda = 0.15;
-      if (baseline && baseScores.length) for (const ii of candIdx){ baseScores[ii] += lambda*(pr.get(idx2item[ii])||0); }
-      if (deep && deepScores.length)    for (const ii of candIdx){ deepScores[ii]  += lambda*(pr.get(idx2item[ii])||0); }
-    }
-
-    const render = (tblId, scoresArr) => {
-      if (!scoresArr.length || !candIdx.length){
-        $(tblId).innerHTML = `<tr><td class="muted" colspan="3">—</td></tr>`; return;
-      }
-      // build top-10 safely (skip NaNs)
-      const picked = candIdx
-        .map(ii=>({ii, s: Number.isFinite(scoresArr[ii]) ? scoresArr[ii] : -Infinity}))
-        .filter(o=>Number.isFinite(o.s))
-        .sort((a,b)=>b.s-a.s)
-        .slice(0,10);
-      $(tblId).innerHTML = picked.length
-        ? picked.map((row,idx)=>(`<tr><td>${idx+1}</td><td>${escapeHtml(items.get(idx2item[row.ii])?.title||String(idx2item[row.ii]))}</td><td>${row.s.toFixed(3)}</td></tr>`)).join('')
-        : `<tr><td class="muted" colspan="3">— no candidates —</td></tr>`;
-    };
-    render('baseTbl', baseScores);
-    render('deepTbl', deepScores);
-    $('demoLine').textContent += ' — recommendations generated successfully!';
-  }catch(e){
-    console.error(e);
-    $('demoLine').textContent = 'Error while generating recommendations (see console).';
-    $('histTbl').innerHTML = `<tr><td class="muted" colspan="3">—</td></tr>`;
-    $('baseTbl').innerHTML = `<tr><td class="muted" colspan="3">—</td></tr>`;
-    $('deepTbl').innerHTML = `<tr><td class="muted" colspan="3">—</td></tr>`;
   }
+
+  if (!baseScores.length) setEmpty('baseTbl','baseline not trained');
+  if (!deepScores.length) setEmpty('deepTbl','deep model not trained');
+
+  // Optional graph re-rank
+  if ($('useGraph').checked && candIdx.length){
+    const pr = personalizedPageRankForUser(u, user2items, item2users, {alpha:0.15, iters:20});
+    const lambda = 0.15;
+    if (baseline && baseScores.length) for (const ii of candIdx){ baseScores[ii] += lambda*(pr.get(idx2item[ii])||0); }
+    if (deep && deepScores.length)    for (const ii of candIdx){ deepScores[ii]  += lambda*(pr.get(idx2item[ii])||0); }
+  }
+
+  const render = (tblId, scoresArr, emptyMsg) => {
+    if (!scoresArr.length){ setEmpty(tblId, emptyMsg); return; }
+    if (!candIdx.length){ setEmpty(tblId, 'no unseen items for this user'); return; }
+    const picked = candIdx.map(ii=>({ii, s:scoresArr[ii]})).sort((a,b)=>b.s-a.s).slice(0,10);
+    if (!picked.length){ setEmpty(tblId, 'no candidates'); return; }
+    $(tblId).innerHTML = picked.map((row,idx)=>(
+      `<tr><td>${idx+1}</td><td>${escapeHtml(items.get(idx2item[row.ii])?.title||String(idx2item[row.ii]))}</td><td>${row.s.toFixed(3)}</td></tr>`
+    )).join('');
+  };
+
+  render('baseTbl', baseScores, 'baseline not trained');
+  render('deepTbl', deepScores, 'deep model not trained');
+  $('demoLine').textContent += '  — recommendations generated successfully!';
 }
 
 // --------- Metrics (Recall@10 / nDCG@10 with sampled negatives) ----------
@@ -578,11 +560,10 @@ async function computeAndShowMetrics(){
 
       const neg = [];
       while (neg.length<sampleNeg){
-        const iid = idx2item[(Math.random()*idx2item.length)|0];
-        if (!seen.has(iid) && !testPos.includes(iid)) neg.push(iid);
+        const ii = idx2item[(Math.random()*idx2item.length)|0];
+        if (!seen.has(ii) && !testPos.includes(ii)) neg.push(ii);
       }
-      const posSample = testPos.slice(0, Math.min(testPos.length,5));
-      const candidates = posSample.concat(neg);
+      const candidates = testPos.slice(0, Math.min(testPos.length,5)).concat(neg);
 
       const uIdx = tf.tensor1d([userIndex.get(u)], 'int32');
       const scores = await model.scoreItems(uIdx, candidates.map(i=>itemIndex.get(i)));
@@ -590,11 +571,11 @@ async function computeAndShowMetrics(){
       const arr = Array.from(scores.dataSync());
       scores.dispose();
 
-      const zipped = candidates.map((iid,ix)=>({iid, s:arr[ix], rel: posSample.includes(iid)?1:0}))
+      const zipped = candidates.map((iid,ix)=>({iid, s:arr[ix], rel: testPos.includes(iid)?1:0}))
                                .sort((a,b)=>b.s-a.s).slice(0,K);
       hits += zipped.some(z=>z.rel>0) ? 1 : 0;
-      dcg  += zipped.reduce((s,z,idx)=> s + (z.rel>0 ? 1/Math.log2(idx+2) : 0), 0);
-      ideal+= 1; // one relevant per query (posSample≥1)
+      dcg += zipped.reduce((s,z,idx)=> s + (z.rel>0 ? 1/Math.log2(idx+2) : 0), 0);
+      ideal += 1;
     }
     return { recallAt10: hits/Math.max(1,uPick.length), ndcgAt10: dcg/Math.max(1,ideal) };
   }
