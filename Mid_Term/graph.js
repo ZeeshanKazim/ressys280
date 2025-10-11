@@ -1,79 +1,65 @@
-/* graph.js
-   Tiny co-vis graph and Personalized PageRank re-rank.
-   Graph nodes = recipe IDs, edges connect items co-rated by a user.
-*/
-const Graph = (() => {
-  "use strict";
+/* graph.js – simple co-visitation graph + Personalized PageRank */
 
-  const adj = new Map(); // itemId -> Map(itemId -> weight)
-
-  function addEdge(a,b,w=1){
+function buildItemGraph(user2items){
+  // Undirected weighted graph over items: weight = co-occurrence count across users
+  const G = new Map(); // itemId -> Map(itemId -> w)
+  function bump(a,b){
     if (a===b) return;
-    if (!adj.has(a)) adj.set(a, new Map());
-    if (!adj.has(b)) adj.set(b, new Map());
-    adj.get(a).set(b, (adj.get(a).get(b)||0) + w);
-    adj.get(b).set(a, (adj.get(b).get(a)||0) + w);
+    if (!G.has(a)) G.set(a,new Map());
+    const m = G.get(a); m.set(b, (m.get(b)||0)+1);
   }
-
-  function buildCoVis(interactions, {maxItems}={}){
-    adj.clear();
-    // group by user
-    const map = new Map();
-    for (const x of interactions){
-      if (!map.has(x.u)) map.set(x.u, []);
-      map.get(x.u).push(x.i);
-    }
-    for (const [u, items] of map){
-      const uniq = Array.from(new Set(items));
-      for (let i=0;i<uniq.length;i++){
-        for (let j=i+1;j<uniq.length;j++){
-          addEdge(uniq[i], uniq[j], 1);
-        }
+  for (const [,arr] of user2items){
+    const uniq = Array.from(new Set(arr.map(x=>x.i)));
+    for (let i=0;i<uniq.length;i++){
+      for (let j=i+1;j<uniq.length;j++){
+        bump(uniq[i], uniq[j]); bump(uniq[j], uniq[i]);
       }
     }
   }
+  // normalize to transition probabilities
+  for (const [node, nbr] of G){
+    let s=0; for (const w of nbr.values()) s+=w;
+    if (s>0){ for (const k of nbr.keys()) nbr.set(k, nbr.get(k)/s); }
+  }
+  return G;
+}
 
-  // Personalized PageRank given a user’s seen items boosts neighbors
-  function rerankWithPPR(userId, rankedPairs, userToItems, alpha=0.15, iters=20){
-    const seen = userToItems.get(userId) || new Map();
-    if (!seen.size) return rankedPairs;
+let _graphCache = null;
 
-    // teleport vector over seen items
-    const teleport = new Map(); for (const i of seen.keys()) teleport.set(i, 1/seen.size);
+function personalizedPageRankForUser(u, user2items, item2users, {alpha=0.15,iters=20}={}){
+  if (!_graphCache) _graphCache = buildItemGraph(user2items);
+  const G = _graphCache;
 
-    // scores init
-    const r = new Map(); // item -> score
-    for (const [i,_] of teleport) r.set(i, 1/teleport.size);
+  const seen = new Set((user2items.get(u)||[]).map(x=>x.i));
+  if (!seen.size) return new Map();
 
-    // iterate
-    for (let t=0;t<iters;t++){
-      const nr = new Map();
-      // distribute
-      for (const [i,ri] of r){
-        const nbr = adj.get(i);
-        if (!nbr || nbr.size===0) continue;
-        const Z = [...nbr.values()].reduce((a,b)=>a+b,0);
-        for (const [j,w] of nbr){
-          nr.set(j, (nr.get(j)||0) + (1-alpha)*ri*(w/Z));
-        }
+  const nodes = Array.from(G.keys());
+  const idx = new Map(nodes.map((id,i)=>[id,i]));
+
+  const n = nodes.length;
+  const p = new Float32Array(n);
+  for (const id of seen){ if (idx.has(id)) p[idx.get(id)] = 1/seen.size; }
+
+  let r = new Float32Array(n); r.set(p);
+
+  // r_{t+1} = (1-α) * P^T r_t + α p
+  for (let t=0;t<iters;t++){
+    const next = new Float32Array(n);
+    for (let a=0;a<n;a++){
+      const mass = (1-alpha) * r[a];
+      const nbr = G.get(nodes[a]); if (!nbr) continue;
+      for (const [b,w] of nbr.entries()){
+        const bi = idx.get(b);
+        next[bi] += mass * w;
       }
-      // teleport back to seen
-      for (const [i,pi] of teleport){
-        nr.set(i, (nr.get(i)||0) + alpha*pi);
-      }
-      // normalize
-      const sum = [...nr.values()].reduce((a,b)=>a+b,0) || 1;
-      for (const k of nr.keys()) nr.set(k, nr.get(k)/sum);
-      // swap
-      r.clear(); for (const [k,v] of nr) r.set(k,v);
     }
-
-    // re-rank pairs [itemId,score] by adding small boost λ * ppr
-    const lambda = 0.15;
-    const out = rankedPairs.map(([iid, sc]) => [iid, sc + lambda*(r.get(iid)||0)]);
-    out.sort((a,b)=> b[1]-a[1]);
-    return out;
+    for (let i=0;i<n;i++) next[i]+= alpha * p[i];
+    r = next;
   }
 
-  return { buildCoVis, rerankWithPPR };
-})();
+  const out = new Map();
+  for (let i=0;i<n;i++){ if (r[i]>0) out.set(nodes[i], r[i]); }
+  return out;
+}
+
+window.personalizedPageRankForUser = personalizedPageRankForUser;
