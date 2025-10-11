@@ -1,65 +1,86 @@
-/* graph.js – simple co-visitation graph + Personalized PageRank */
+/* graph.js
+   Lightweight Personalized PageRank over a user–item bipartite graph.
+   We run a two‑step random walk (item→user→item) within a local neighborhood.
+   Returns: Map<itemId, score> for re‑ranking.
+*/
 
-function buildItemGraph(user2items){
-  // Undirected weighted graph over items: weight = co-occurrence count across users
-  const G = new Map(); // itemId -> Map(itemId -> w)
-  function bump(a,b){
-    if (a===b) return;
-    if (!G.has(a)) G.set(a,new Map());
-    const m = G.get(a); m.set(b, (m.get(b)||0)+1);
-  }
-  for (const [,arr] of user2items){
-    const uniq = Array.from(new Set(arr.map(x=>x.i)));
-    for (let i=0;i<uniq.length;i++){
-      for (let j=i+1;j<uniq.length;j++){
-        bump(uniq[i], uniq[j]); bump(uniq[j], uniq[i]);
-      }
+function personalizedPageRankForUser(userId, user2items, item2users, opts = {}) {
+  const alpha = opts.alpha ?? 0.15; // restart prob
+  const iters = opts.iters ?? 20;
+  const maxUsers = opts.maxUsers ?? 4000;   // keep local neighborhood bounded
+  const maxItems = opts.maxItems ?? 6000;
+
+  // Seed = user's own items
+  const seedItems = new Set((user2items.get(userId) || []).map(x => x.i));
+  if (!seedItems.size) return new Map();
+
+  // Neighborhood: users who touched seedItems, and the items they touched
+  const nbrUsers = new Set();
+  for (const i of seedItems) {
+    const uSet = item2users.get(i);
+    if (!uSet) continue;
+    for (const u of uSet) {
+      if (nbrUsers.size < maxUsers) nbrUsers.add(u);
     }
   }
-  // normalize to transition probabilities
-  for (const [node, nbr] of G){
-    let s=0; for (const w of nbr.values()) s+=w;
-    if (s>0){ for (const k of nbr.keys()) nbr.set(k, nbr.get(k)/s); }
+  const candItems = new Set([...seedItems]);
+  for (const u of nbrUsers) {
+    const arr = user2items.get(u) || [];
+    for (const row of arr) {
+      if (candItems.size < maxItems) candItems.add(row.i);
+    }
   }
-  return G;
-}
 
-let _graphCache = null;
+  // Degree caches
+  const degItem = new Map();
+  const degUser = new Map();
+  for (const i of candItems) degItem.set(i, (item2users.get(i) || new Set()).size || 1);
+  for (const u of nbrUsers) degUser.set(u, (user2items.get(u) || []).length || 1);
 
-function personalizedPageRankForUser(u, user2items, item2users, {alpha=0.15,iters=20}={}){
-  if (!_graphCache) _graphCache = buildItemGraph(user2items);
-  const G = _graphCache;
+  // Scores
+  let score = new Map();
+  let teleport = new Map();
+  for (const i of candItems) score.set(i, seedItems.has(i) ? 1 / seedItems.size : 0);
+  teleport = new Map(score); // same support
 
-  const seen = new Set((user2items.get(u)||[]).map(x=>x.i));
-  if (!seen.size) return new Map();
-
-  const nodes = Array.from(G.keys());
-  const idx = new Map(nodes.map((id,i)=>[id,i]));
-
-  const n = nodes.length;
-  const p = new Float32Array(n);
-  for (const id of seen){ if (idx.has(id)) p[idx.get(id)] = 1/seen.size; }
-
-  let r = new Float32Array(n); r.set(p);
-
-  // r_{t+1} = (1-α) * P^T r_t + α p
-  for (let t=0;t<iters;t++){
-    const next = new Float32Array(n);
-    for (let a=0;a<n;a++){
-      const mass = (1-alpha) * r[a];
-      const nbr = G.get(nodes[a]); if (!nbr) continue;
-      for (const [b,w] of nbr.entries()){
-        const bi = idx.get(b);
-        next[bi] += mass * w;
+  // Iterate: item→user→item with restart
+  for (let t = 0; t < iters; t++) {
+    // Push to users
+    const userScore = new Map();
+    for (const [i, s] of score.entries()) {
+      const users = item2users.get(i) || new Set();
+      const di = degItem.get(i) || 1;
+      for (const u of users) {
+        if (!nbrUsers.has(u)) continue;
+        const val = (userScore.get(u) || 0) + s / di;
+        userScore.set(u, val);
       }
     }
-    for (let i=0;i<n;i++) next[i]+= alpha * p[i];
-    r = next;
-  }
+    // Normalize by each user degree
+    for (const [u, v] of userScore.entries()) {
+      userScore.set(u, v / (degUser.get(u) || 1));
+    }
 
-  const out = new Map();
-  for (let i=0;i<n;i++){ if (r[i]>0) out.set(nodes[i], r[i]); }
-  return out;
+    // Pull back to items
+    const next = new Map();
+    for (const [u, su] of userScore.entries()) {
+      const arr = user2items.get(u) || [];
+      for (const row of arr) {
+        if (!candItems.has(row.i)) continue;
+        const di = degItem.get(row.i) || 1;
+        next.set(row.i, (next.get(row.i) || 0) + su / di);
+      }
+    }
+
+    // Restart
+    for (const i of candItems) {
+      const walk = (1 - alpha) * (next.get(i) || 0);
+      const restart = alpha * (teleport.get(i) || 0);
+      next.set(i, walk + restart);
+    }
+    score = next;
+  }
+  return score;
 }
 
 window.personalizedPageRankForUser = personalizedPageRankForUser;
