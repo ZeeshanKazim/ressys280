@@ -1,79 +1,79 @@
 /* graph.js
-   Build a simple co-visitation item graph and run Personalized PageRank.
-   Intended for light, in-browser re-rank of a candidate set.
+   Tiny co-vis graph and Personalized PageRank re-rank.
+   Graph nodes = recipe IDs, edges connect items co-rated by a user.
 */
+const Graph = (() => {
+  "use strict";
 
-function buildCoVisGraph(interactions, itemIdToIdx, opts={}) {
-  const alpha = opts.alpha ?? 0.75;        // decay for within-user pairs by distance
-  const maxNeighbors = opts.maxNeighbors ?? 64;
+  const adj = new Map(); // itemId -> Map(itemId -> weight)
 
-  // neighbors[idx] = Map(neiIdx -> weight)
-  const neighbors = new Map();
-
-  // Collect per user
-  const byUser = new Map();
-  for (const r of interactions) {
-    if (!byUser.has(r.user)) byUser.set(r.user, []);
-    byUser.get(r.user).push(r.item);
+  function addEdge(a,b,w=1){
+    if (a===b) return;
+    if (!adj.has(a)) adj.set(a, new Map());
+    if (!adj.has(b)) adj.set(b, new Map());
+    adj.get(a).set(b, (adj.get(a).get(b)||0) + w);
+    adj.get(b).set(a, (adj.get(b).get(a)||0) + w);
   }
-  // For each user, add pairwise co-views with decay
-  for (const [u, items] of byUser) {
-    const arr = items.slice(0, 200); // safety cap
-    for (let i=0;i<arr.length;i++){
-      const ai = itemIdToIdx.get(arr[i]); if (ai==null) continue;
-      for (let j=i+1;j<arr.length;j++){
-        const aj = itemIdToIdx.get(arr[j]); if (aj==null) continue;
-        const w = Math.pow(alpha, j-i-1);
-        if (!neighbors.has(ai)) neighbors.set(ai, new Map());
-        if (!neighbors.has(aj)) neighbors.set(aj, new Map());
-        neighbors.get(ai).set(aj, (neighbors.get(ai).get(aj)||0)+w);
-        neighbors.get(aj).set(ai, (neighbors.get(aj).get(ai)||0)+w);
+
+  function buildCoVis(interactions, {maxItems}={}){
+    adj.clear();
+    // group by user
+    const map = new Map();
+    for (const x of interactions){
+      if (!map.has(x.u)) map.set(x.u, []);
+      map.get(x.u).push(x.i);
+    }
+    for (const [u, items] of map){
+      const uniq = Array.from(new Set(items));
+      for (let i=0;i<uniq.length;i++){
+        for (let j=i+1;j<uniq.length;j++){
+          addEdge(uniq[i], uniq[j], 1);
+        }
       }
     }
   }
 
-  // Keep top-k neighbors
-  for (const [i, map] of neighbors) {
-    const top = [...map.entries()].sort((a,b)=>b[1]-a[1]).slice(0, maxNeighbors);
-    neighbors.set(i, new Map(top));
-  }
-  return {neighbors};
-}
+  // Personalized PageRank given a user’s seen items boosts neighbors
+  function rerankWithPPR(userId, rankedPairs, userToItems, alpha=0.15, iters=20){
+    const seen = userToItems.get(userId) || new Map();
+    if (!seen.size) return rankedPairs;
 
-// Personalized PageRank on neighbors graph. seeds: array of item indices.
-function personalizedPageRank(graph, seeds, opts={}) {
-  const n = Math.max(...graphNeighborsKeys(graph))+1;
-  const d = opts.d ?? 0.85;
-  const iters = opts.iters ?? 30;
-  const seedProb = 1.0 / (seeds.length||1);
-  const p0 = new Float32Array(n);
-  for (const s of seeds) if (s<n) p0[s] = seedProb;
+    // teleport vector over seen items
+    const teleport = new Map(); for (const i of seen.keys()) teleport.set(i, 1/seen.size);
 
-  const p = new Float32Array(n);
-  const deg = new Float32Array(n);
-  // compute degrees
-  for (const [i,nei] of graph.neighbors) {
-    let sum = 0; for (const [,w] of nei) sum += w;
-    deg[i] = sum || 1;
-  }
+    // scores init
+    const r = new Map(); // item -> score
+    for (const [i,_] of teleport) r.set(i, 1/teleport.size);
 
-  // Power iteration: p = (1-d)*p0 + d*W^T * p
-  const tmp = new Float32Array(n);
-  for (let t=0;t<iters;t++){
-    tmp.fill(0);
-    for (const [i,nei] of graph.neighbors) {
-      const mass = p[i]/deg[i];
-      for (const [j,w] of nei) tmp[j] += w * mass;
+    // iterate
+    for (let t=0;t<iters;t++){
+      const nr = new Map();
+      // distribute
+      for (const [i,ri] of r){
+        const nbr = adj.get(i);
+        if (!nbr || nbr.size===0) continue;
+        const Z = [...nbr.values()].reduce((a,b)=>a+b,0);
+        for (const [j,w] of nbr){
+          nr.set(j, (nr.get(j)||0) + (1-alpha)*ri*(w/Z));
+        }
+      }
+      // teleport back to seen
+      for (const [i,pi] of teleport){
+        nr.set(i, (nr.get(i)||0) + alpha*pi);
+      }
+      // normalize
+      const sum = [...nr.values()].reduce((a,b)=>a+b,0) || 1;
+      for (const k of nr.keys()) nr.set(k, nr.get(k)/sum);
+      // swap
+      r.clear(); for (const [k,v] of nr) r.set(k,v);
     }
-    for (let i=0;i<n;i++) p[i] = (1-d)*p0[i] + d*tmp[i];
+
+    // re-rank pairs [itemId,score] by adding small boost λ * ppr
+    const lambda = 0.15;
+    const out = rankedPairs.map(([iid, sc]) => [iid, sc + lambda*(r.get(iid)||0)]);
+    out.sort((a,b)=> b[1]-a[1]);
+    return out;
   }
-  return p;
-}
 
-function graphNeighborsKeys(g){ return [...g.neighbors.keys()]; }
-
-if (typeof window !== 'undefined') {
-  window.buildCoVisGraph = buildCoVisGraph;
-  window.personalizedPageRank = personalizedPageRank;
-}
-export { buildCoVisGraph, personalizedPageRank };
+  return { buildCoVis, rerankWithPPR };
+})();
