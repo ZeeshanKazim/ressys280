@@ -1,97 +1,79 @@
-/* graph.js — simple co-vis graph and Personalized PageRank
-   Build an item-item graph: edges weighted by co-occurrence within same user.
-   Use it to optionally re-rank recommender scores with PPR from the user’s history.
+/* graph.js
+   Build a simple co-visitation item graph and run Personalized PageRank.
+   Intended for light, in-browser re-rank of a candidate set.
 */
 
-let GRAPH = null; // Map itemIdx -> Map neighborIdx -> weight
-let GRAPH_N = 0;
+function buildCoVisGraph(interactions, itemIdToIdx, opts={}) {
+  const alpha = opts.alpha ?? 0.75;        // decay for within-user pairs by distance
+  const maxNeighbors = opts.maxNeighbors ?? 64;
 
-function ensureGraph(INTERACTIONS){
-  if (GRAPH) return GRAPH;
-  GRAPH = new Map();
-  // Build by user windows (small memory footprint)
+  // neighbors[idx] = Map(neiIdx -> weight)
+  const neighbors = new Map();
+
+  // Collect per user
   const byUser = new Map();
-  for(const x of INTERACTIONS){
-    if(!byUser.has(x.userId)) byUser.set(x.userId, []);
-    byUser.get(x.userId).push(x.itemId);
+  for (const r of interactions) {
+    if (!byUser.has(r.user)) byUser.set(r.user, []);
+    byUser.get(r.user).push(r.item);
   }
-  for(const arr of byUser.values()){
-    // use set to reduce self duplicates
-    const uniq = Array.from(new Set(arr));
-    for(let a=0;a<uniq.length;a++){
-      for(let b=a+1;b<uniq.length;b++){
-        addEdge(uniq[a], uniq[b], 1);
+  // For each user, add pairwise co-views with decay
+  for (const [u, items] of byUser) {
+    const arr = items.slice(0, 200); // safety cap
+    for (let i=0;i<arr.length;i++){
+      const ai = itemIdToIdx.get(arr[i]); if (ai==null) continue;
+      for (let j=i+1;j<arr.length;j++){
+        const aj = itemIdToIdx.get(arr[j]); if (aj==null) continue;
+        const w = Math.pow(alpha, j-i-1);
+        if (!neighbors.has(ai)) neighbors.set(ai, new Map());
+        if (!neighbors.has(aj)) neighbors.set(aj, new Map());
+        neighbors.get(ai).set(aj, (neighbors.get(ai).get(aj)||0)+w);
+        neighbors.get(aj).set(ai, (neighbors.get(aj).get(ai)||0)+w);
       }
     }
   }
-  GRAPH_N = new Set([].concat(...Array.from(GRAPH.keys()))).size;
-  return GRAPH;
 
-  function addEdge(itemAId, itemBId, w){
-    const A = window.item2idx.get(itemAId);
-    const B = window.item2idx.get(itemBId);
-    if (A==null || B==null || A===B) return;
-    if(!GRAPH.has(A)) GRAPH.set(A, new Map());
-    if(!GRAPH.has(B)) GRAPH.set(B, new Map());
-    GRAPH.get(A).set(B, (GRAPH.get(A).get(B)||0) + w);
-    GRAPH.get(B).set(A, (GRAPH.get(B).get(A)||0) + w);
+  // Keep top-k neighbors
+  for (const [i, map] of neighbors) {
+    const top = [...map.entries()].sort((a,b)=>b[1]-a[1]).slice(0, maxNeighbors);
+    neighbors.set(i, new Map(top));
   }
+  return {neighbors};
 }
 
-/* Personalized PageRank using power iteration.
-   seeds: array of itemIds (history)
-   returns Map idx->score
-*/
-function personalizedPageRank(seeds, alpha=0.15, iters=30){
-  if(!GRAPH) return new Map();
-  const M = window.idx2item.length;
-  const v = new Float32Array(M); // personalization
-  const seedIdx = seeds.map(id=>window.item2idx.get(id)).filter(i=>i!=null);
-  if (!seedIdx.length) return new Map();
-  const mass = 1/seedIdx.length;
-  for(const s of seedIdx){ v[s]=mass; }
+// Personalized PageRank on neighbors graph. seeds: array of item indices.
+function personalizedPageRank(graph, seeds, opts={}) {
+  const n = Math.max(...graphNeighborsKeys(graph))+1;
+  const d = opts.d ?? 0.85;
+  const iters = opts.iters ?? 30;
+  const seedProb = 1.0 / (seeds.length||1);
+  const p0 = new Float32Array(n);
+  for (const s of seeds) if (s<n) p0[s] = seedProb;
 
-  // degree
-  const deg = new Float32Array(M);
-  for(const [i,nb] of GRAPH){
-    let sum=0; for(const [,w] of nb) sum+=w;
-    deg[i]=sum||1;
+  const p = new Float32Array(n);
+  const deg = new Float32Array(n);
+  // compute degrees
+  for (const [i,nei] of graph.neighbors) {
+    let sum = 0; for (const [,w] of nei) sum += w;
+    deg[i] = sum || 1;
   }
 
-  // iterate: r_{t+1} = alpha*v + (1-alpha)*P^T r_t
-  let r = v.slice();
-  for(let t=0;t<iters;t++){
-    const r2 = new Float32Array(M);
-    for(const [i,nb] of GRAPH){
-      const ri = r[i];
-      if(ri===0) continue;
-      for(const [j,w] of nb){
-        r2[j] += (1-alpha) * ri * (w/deg[i]);
-      }
+  // Power iteration: p = (1-d)*p0 + d*W^T * p
+  const tmp = new Float32Array(n);
+  for (let t=0;t<iters;t++){
+    tmp.fill(0);
+    for (const [i,nei] of graph.neighbors) {
+      const mass = p[i]/deg[i];
+      for (const [j,w] of nei) tmp[j] += w * mass;
     }
-    for(let k=0;k<M;k++) r2[k] += alpha * v[k];
-    r = r2;
+    for (let i=0;i<n;i++) p[i] = (1-d)*p0[i] + d*tmp[i];
   }
-  const out = new Map();
-  for(let i=0;i<M;i++) if(r[i]>0) out.set(i, r[i]);
-  return out;
+  return p;
 }
 
-/* Combine base scores with PPR: score' = (1-l)*score + l*norm(ppr) */
-function rerankWithGraph(base, ppr, lambda=0.3){
-  if(!base.length) return base;
-  const maxBase = Math.max(...base.map(x=>x.score)) || 1;
-  const maxPPR = Math.max(1e-9, ...Array.from(ppr.values()));
-  const m = new Map(base.map(x=>[x.idx, x.score/maxBase]));
-  const out = base.map(x=>{
-    const s = (1-lambda)*(m.get(x.idx)||0) + lambda*((ppr.get(x.idx)||0)/maxPPR);
-    return {idx:x.idx, score:s};
-  });
-  out.sort((a,b)=>b.score-a.score);
-  return out;
-}
+function graphNeighborsKeys(g){ return [...g.neighbors.keys()]; }
 
-// expose
-window.ensureGraph = ensureGraph;
-window.personalizedPageRank = personalizedPageRank;
-window.rerankWithGraph = rerankWithGraph;
+if (typeof window !== 'undefined') {
+  window.buildCoVisGraph = buildCoVisGraph;
+  window.personalizedPageRank = personalizedPageRank;
+}
+export { buildCoVisGraph, personalizedPageRank };
