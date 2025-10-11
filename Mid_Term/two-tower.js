@@ -1,7 +1,15 @@
 /* two-tower.js
-   Minimal Two‑Tower retrieval in TensorFlow.js with an optional deep (MLP) item tower.
-   Baseline loss = in‑batch sampled softmax (users × positive items in the same batch).
-   Deep tower = item_id embedding + MLP(tag_features) → item representation.
+   Minimal Two‑Tower retriever in TensorFlow.js
+
+   Baseline:
+     - userEmbedding:  [numUsers, embDim] (trainable)
+     - itemEmbedding:  [numItems, embDim] (trainable)
+     - Loss: in‑batch sampled softmax (InfoNCE style)
+
+   Deep:
+     - user ID embedding: [numUsers, embDim] (trainable)
+     - item tower: base ID embedding + MLP(tags) → embDim
+       (at least one hidden layer; here 1 hidden layer ReLU)
 */
 
 class TwoTowerModel {
@@ -9,208 +17,186 @@ class TwoTowerModel {
     this.numUsers = numUsers;
     this.numItems = numItems;
     this.embDim = embDim;
-    this.lr = opts.learningRate ?? 1e-3;
+    this.lr = opts.learningRate || 1e-3;
 
-    // Make names unique to avoid "Variable already registered" when retraining.
-    this.uid = `tt_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-
-    this.userEmbedding = tf.variable(
-      tf.randomNormal([numUsers, embDim], 0, 0.05),
-      true,
-      `uEmb_${this.uid}`
-    );
-    this.itemEmbedding = tf.variable(
-      tf.randomNormal([numItems, embDim], 0, 0.05),
-      true,
-      `iEmb_${this.uid}`
-    );
+    // Variables (no fixed names to avoid "already registered" collisions)
+    this.userEmbedding = tf.variable(tf.randomNormal([numUsers, embDim], 0, 0.05));
+    this.itemEmbedding = tf.variable(tf.randomNormal([numItems, embDim], 0, 0.05));
 
     this.optimizer = tf.train.adam(this.lr);
   }
 
-  async compile() {
-    // nothing else to do for baseline
-    return;
+  async compile() { /* symmetry with Deep model */ }
+
+  // Lookups
+  userForward(userIdxTensor) {             // [B]
+    return tf.gather(this.userEmbedding, userIdxTensor); // [B, D]
+  }
+  itemForward(itemIdxTensor) {             // [B]
+    return tf.gather(this.itemEmbedding, itemIdxTensor); // [B, D]
   }
 
-  userForward(uIdx) {
-    return tf.gather(this.userEmbedding, uIdx); // [B,D]
-  }
-
-  itemForward(iIdx) {
-    return tf.gather(this.itemEmbedding, iIdx); // [B,D]
-  }
-
-  // In‑batch softmax: logits = U @ I^T, labels = diag
-  async trainStep(uIdx, iIdx) {
-    const lossVal = await this.optimizer.minimize(() => {
-      const U = this.userForward(uIdx);              // [B,D]
-      const I = this.itemForward(iIdx);              // [B,D]
-      const logits = tf.matMul(U, I, false, true);   // [B,B]
-
-      const b = logits.shape[0];
-      const labels = tf.eye(b);
-      // softmaxCrossEntropy expects logits; returns [B]
-      const per = tf.losses.softmaxCrossEntropy(labels, logits);
-      const loss = per.mean();
-
-      // tiny L2
-      const reg = tf.add(
-        tf.mul(1e-6, tf.sum(tf.square(U))),
-        tf.mul(1e-6, tf.sum(tf.square(I)))
-      );
-      return tf.add(loss, reg);
-    }, true).data();
-
-    return (await lossVal)[0];
-  }
-
-  // Score one user against ALL items
-  scoreUserAgainstAll(uIdx) {
+  // In‑batch sampled softmax:
+  // logits = U @ I^T  (B x B), labels = eye(B)
+  trainStep(userIdxTensor, itemIdxTensor) {
     return tf.tidy(() => {
-      const U = this.userForward(uIdx);             // [1,D] or [B,D]
-      const allI = this.itemEmbedding;              // [N,D]
-      return tf.matMul(U, allI, false, true).squeeze(); // [N] (for 1 user)
+      const B = userIdxTensor.shape[0];
+      const oneHot = tf.oneHot(tf.range(0, B, 1, 'int32'), B); // [B,B]
+
+      let lossVal;
+      this.optimizer.minimize(() => {
+        const uEmb = this.userForward(userIdxTensor); // [B,D]
+        const iEmb = this.itemForward(itemIdxTensor); // [B,D]
+        const logits = tf.matMul(uEmb, iEmb, false, true); // [B,B]
+        const lossVec = tf.losses.softmaxCrossEntropy(oneHot, logits);
+        const loss = tf.mean(lossVec);
+        lossVal = loss.dataSync()[0];
+        return loss;
+      }, /* returnCost */ false, [
+        this.userEmbedding, this.itemEmbedding
+      ]);
+
+      return lossVal;
     });
   }
 
-  // Score one user against a candidate list of indices
-  scoreItems(uIdx, itemIndicesArray) {
+  // Score user u against all items: returns [numItems]
+  scoreUserAgainstAll(userIdxTensor) {
     return tf.tidy(() => {
-      const U = this.userForward(uIdx); // [1,D]
-      const I = tf.gather(this.itemEmbedding, tf.tensor1d(itemIndicesArray, 'int32')); // [K,D]
-      return tf.matMul(U, I, false, true).squeeze(); // [K]
+      const u = this.userForward(userIdxTensor);              // [1,D]
+      const allI = this.itemEmbedding;                        // [I,D]
+      const logits = tf.matMul(u, allI, false, true);         // [1, I]
+      return logits.squeeze();                                 // [I]
     });
   }
 
-  getItemEmbMatrix() {
-    return this.itemEmbedding.read(); // Tensor2D [numItems, D]
+  // Score user u for a set of item indices (Array<int>)
+  scoreItems(userIdxTensor, itemIdxArray) {
+    return tf.tidy(() => {
+      const u = this.userForward(userIdxTensor);              // [1,D]
+      const iIdx = tf.tensor1d(itemIdxArray, 'int32');        // [K]
+      const i = tf.gather(this.itemEmbedding, iIdx);          // [K,D]
+      const logits = tf.matMul(i, u, false, true).squeeze();  // [K]
+      iIdx.dispose();
+      return logits;
+    });
   }
+
+  // For projection
+  readItemEmbedding() { return this.itemEmbedding; }
 
   dispose() {
     this.userEmbedding?.dispose();
     this.itemEmbedding?.dispose();
-    this.optimizer?.dispose?.();
+    // Optimizer has no dispose in tfjs 4.x, will GC.
   }
 }
 
-/** Deep two‑tower:
- * item tower = learnable item_id embedding + MLP(tag one‑hot / multi‑hot)
- * user tower = ID embedding (like baseline)
- */
 class DeepTwoTowerModel {
   constructor(numUsers, numItems, embDim = 32, tagDim = 200, opts = {}) {
     this.numUsers = numUsers;
     this.numItems = numItems;
     this.embDim = embDim;
     this.tagDim = tagDim;
-    this.lr = opts.learningRate ?? 1e-3;
+    this.lr = opts.learningRate || 1e-3;
 
-    this.uid = `dt_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    // User ID table
+    this.userIdEmb = tf.variable(tf.randomNormal([numUsers, embDim], 0, 0.05));
+    // Base item ID table (lets the model capture idiosyncrasies)
+    this.itemIdEmb = tf.variable(tf.randomNormal([numItems, embDim], 0, 0.05));
 
-    // Towers
-    this.userEmbedding = tf.variable(
-      tf.randomNormal([numUsers, embDim], 0, 0.05),
-      true,
-      `duEmb_${this.uid}`
-    );
-    this.itemEmbedding = tf.variable(
-      tf.randomNormal([numItems, embDim], 0, 0.05),
-      true,
-      `diEmb_${this.uid}`
-    );
-
-    // MLP weights (tags → emb)
-    const h = Math.max(embDim * 2, 32);
-    this.W1 = tf.variable(tf.randomNormal([tagDim, h], 0, 0.05), true, `W1_${this.uid}`);
-    this.b1 = tf.variable(tf.zeros([h]), true, `b1_${this.uid}`);
-    this.W2 = tf.variable(tf.randomNormal([h, embDim], 0, 0.05), true, `W2_${this.uid}`);
-    this.b2 = tf.variable(tf.zeros([embDim]), true, `b2_${this.uid}`);
+    // MLP for item tags: tagDim -> hidden -> embDim
+    const hidden = Math.max(32, Math.min(256, Math.round(4 * Math.sqrt(embDim * tagDim))));
+    this.W1 = tf.variable(tf.randomNormal([tagDim, hidden], 0, 0.05));
+    this.b1 = tf.variable(tf.zeros([hidden]));
+    this.W2 = tf.variable(tf.randomNormal([hidden, embDim], 0, 0.05));
+    this.b2 = tf.variable(tf.zeros([embDim]));
 
     this.optimizer = tf.train.adam(this.lr);
 
-    // Provided at compile time
-    this.itemTagMat = null; // Tensor2D [numItems, tagDim]
+    this.itemTagMat = null;     // set in compile()
   }
 
-  async compile(itemTagMat) {
-    // Keep a dedicated, immutable copy (used during training + inference)
-    this.itemTagMat?.dispose();
-    this.itemTagMat = itemTagMat.clone();
+  async compile(itemTagMatrix) {
+    // Expect a dense 0/1 matrix [numItems, tagDim] (float32)
+    this.itemTagMat = itemTagMatrix;
   }
 
-  userForward(uIdx) {
-    return tf.gather(this.userEmbedding, uIdx); // [B,D]
+  // MLP(tags) for a batch: tags [B,tagDim] -> [B,embDim]
+  tagsToEmbedding(tagsBatch) {
+    const h1 = tf.relu(tf.add(tf.matMul(tagsBatch, this.W1), this.b1)); // [B,H]
+    return tf.add(tf.matMul(h1, this.W2), this.b2);                      // [B,D]
   }
 
-  itemForward(iIdx) {
-    // id emb + mlp(tags)
-    const idPart = tf.gather(this.itemEmbedding, iIdx); // [B,D]
-    const tags = tf.gather(this.itemTagMat, iIdx);      // [B,K]
-    const h1 = tf.relu(tf.add(tf.matMul(tags, this.W1), this.b1)); // [B,H]
-    const mlp = tf.add(tf.matMul(h1, this.W2), this.b2); // [B,D]
-    return tf.add(idPart, mlp); // [B,D]
+  userForward(userIdxTensor) {
+    return tf.gather(this.userIdEmb, userIdxTensor); // [B,D]
   }
 
-  async trainStep(uIdx, iIdx) {
-    const lossVal = await this.optimizer.minimize(() => {
-      const U = this.userForward(uIdx);              // [B,D]
-      const I = this.itemForward(iIdx);              // [B,D]
-      const logits = tf.matMul(U, I, false, true);   // [B,B]
-      const b = logits.shape[0];
-      const labels = tf.eye(b);
+  // Batch of item indices -> fused embedding (ID + tagsMLP)
+  itemForward(itemIdxTensor) {
+    const idPart = tf.gather(this.itemIdEmb, itemIdxTensor); // [B,D]
+    const tags = tf.gather(this.itemTagMat, itemIdxTensor);  // [B,K]
+    const tagPart = this.tagsToEmbedding(tags);              // [B,D]
+    return tf.add(idPart, tagPart);                          // [B,D]
+  }
 
-      const per = tf.losses.softmaxCrossEntropy(labels, logits);
-      const loss = per.mean();
+  // In‑batch softmax
+  trainStep(userIdxTensor, itemIdxTensor) {
+    return tf.tidy(() => {
+      const B = userIdxTensor.shape[0];
+      const oneHot = tf.oneHot(tf.range(0, B, 1, 'int32'), B);
 
-      // light L2
-      const reg = tf.addN([
-        tf.mul(1e-6, tf.sum(tf.square(U))),
-        tf.mul(1e-6, tf.sum(tf.square(I))),
-        tf.mul(1e-6, tf.sum(tf.square(this.W1))),
-        tf.mul(1e-6, tf.sum(tf.square(this.W2)))
+      let lossVal;
+      this.optimizer.minimize(() => {
+        const uEmb = this.userForward(userIdxTensor); // [B,D]
+        const iEmb = this.itemForward(itemIdxTensor); // [B,D]
+        const logits = tf.matMul(uEmb, iEmb, false, true); // [B,B]
+        const lossVec = tf.losses.softmaxCrossEntropy(oneHot, logits);
+        const loss = tf.mean(lossVec);
+        lossVal = loss.dataSync()[0];
+        return loss;
+      }, false, [
+        this.userIdEmb, this.itemIdEmb, this.W1, this.b1, this.W2, this.b2
       ]);
-      return tf.add(loss, reg);
-    }, true).data();
 
-    return (await lossVal)[0];
+      return lossVal;
+    });
   }
 
-  // Build full item matrix (id emb + mlp(tags))
+  // Materialize full item table (for fast scoring & projection)
   getFrozenItemEmb() {
     return tf.tidy(() => {
-      const h1 = tf.relu(tf.add(tf.matMul(this.itemTagMat, this.W1), this.b1)); // [N,H]
-      const mlp = tf.add(tf.matMul(h1, this.W2), this.b2);                      // [N,D]
-      return tf.add(this.itemEmbedding, mlp);                                   // [N,D]
+      const tagsPart = this.tagsToEmbedding(this.itemTagMat); // [I,D]
+      return tf.add(this.itemIdEmb, tagsPart);                // [I,D]
     });
   }
 
-  scoreUserAgainstAll(uIdx) {
+  scoreUserAgainstAll(userIdxTensor) {
     return tf.tidy(() => {
-      const U = this.userForward(uIdx); // [1,D]
-      const I = this.getFrozenItemEmb(); // [N,D]
-      const s = tf.matMul(U, I, false, true).squeeze(); // [N]
-      I.dispose();
-      return s;
+      const u = this.userForward(userIdxTensor);      // [1,D]
+      const all = this.getFrozenItemEmb();            // [I,D]
+      const logits = tf.matMul(u, all, false, true);  // [1,I]
+      all.dispose();
+      return logits.squeeze();                         // [I]
     });
   }
 
-  scoreItems(uIdx, itemIndicesArray) {
+  scoreItems(userIdxTensor, itemIdxArray) {
     return tf.tidy(() => {
-      const U = this.userForward(uIdx); // [1,D]
-      const I = tf.gather(this.getFrozenItemEmb(), tf.tensor1d(itemIndicesArray, 'int32')); // [K,D]
-      const s = tf.matMul(U, I, false, true).squeeze(); // [K]
-      I.dispose();
-      return s;
+      const u = this.userForward(userIdxTensor);               // [1,D]
+      const idx = tf.tensor1d(itemIdxArray, 'int32');          // [K]
+      const i = this.itemForward(idx);                         // [K,D]
+      const logits = tf.matMul(i, u, false, true).squeeze();   // [K]
+      idx.dispose();
+      return logits;
     });
   }
 
   dispose() {
-    this.userEmbedding?.dispose();
-    this.itemEmbedding?.dispose();
+    this.userIdEmb?.dispose();
+    this.itemIdEmb?.dispose();
     this.W1?.dispose(); this.b1?.dispose(); this.W2?.dispose(); this.b2?.dispose();
-    this.itemTagMat?.dispose();
-    this.optimizer?.dispose?.();
+    // itemTagMat is owned by app.js; do not dispose here.
   }
 }
 
