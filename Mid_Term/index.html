@@ -1,191 +1,226 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Food Recommender — Two-Tower + Graph (TensorFlow.js)</title>
-
-  <!-- Minimal, dark Netflix-ish skin -->
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Food Recommender — Two-Tower + Graph</title>
+  <meta name="color-scheme" content="dark light" />
   <style>
     :root{
-      --bg:#0b1220; --card:#121a2a; --ink:#e8eefc; --muted:#9fb0d9;
-      --accent:#60a5fa; --accent2:#34d399; --bad:#ef4444; --good:#22c55e;
+      --bg:#0f172a; --panel:#111827; --text:#e5e7eb; --muted:#9ca3af;
+      --accent:#22d3ee; --accent2:#a78bfa; --ok:#34d399; --warn:#fbbf24;
+      --bad:#f87171; --line:#1f2937; --chip:#1f2937;
+      --pad:16px; --radius:12px; --shadow:0 6px 24px rgba(0,0,0,.25);
     }
     *{box-sizing:border-box}
-    body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,Segoe UI,Roboto,Helvetica,Arial}
-    h1{font-size:28px;margin:24px 0 6px}
-    .wrap{max-width:1200px;margin:0 auto;padding:24px}
-    .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 16px}
-    .tab{padding:8px 12px;border-radius:8px;background:#0e1729;color:var(--muted);cursor:pointer;border:1px solid #1d2a44}
-    .tab.active{color:var(--ink);background:var(--card);border-color:#2a3a60}
-    .card{background:var(--card);border:1px solid #1d2a44;border-radius:12px;padding:16px;margin:10px 0}
-    .row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-    .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
-    .btn{background:var(--accent);color:#061022;border:0;border-radius:8px;padding:10px 14px;font-weight:600;cursor:pointer}
-    .btn.secondary{background:#223258;color:var(--ink)}
-    .btn:disabled{opacity:0.5;cursor:not-allowed}
+    html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif}
+    header{padding:28px 18px 8px;max-width:1200px;margin:0 auto}
+    h1{margin:0 0 6px;font-size:28px;letter-spacing:.2px}
+    .sub{color:var(--muted)}
+    .tabs{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+    .tab{border:1px solid #263041;background:#0b1220;color:var(--text);padding:8px 14px;border-radius:10px;cursor:pointer}
+    .tab.active{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+    main{max-width:1200px;margin:10px auto 60px;padding:0 18px}
+    .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);margin:12px 0}
+    .card .head{display:flex;align-items:center;gap:12px;padding:14px var(--pad);border-bottom:1px solid var(--line)}
+    .card .body{padding:var(--pad)}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+    .btn{background:#0b1220;border:1px solid #24324a;padding:9px 14px;border-radius:10px;color:var(--text);cursor:pointer}
+    .btn:disabled{opacity:.55;cursor:not-allowed}
+    .btn.primary{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
     .muted{color:var(--muted)}
-    .grid{display:grid;gap:16px}
-    .kv{display:flex;gap:8px;flex-wrap:wrap}
-    label{font-size:14px;color:var(--muted);display:block;margin-bottom:6px}
-    select,input[type="number"],input[type="checkbox"]{background:#0e1729;border:1px solid #263659;color:var(--ink);border-radius:8px;padding:8px}
-    .table{width:100%;border-collapse:collapse}
-    .table th,.table td{border-bottom:1px solid #233352;padding:8px 6px;text-align:left}
-    .pill{display:inline-block;padding:2px 8px;border:1px solid #2a3a60;border-radius:999px;margin:2px;color:#b9c6e4;font-size:12px}
-    canvas{width:100%;height:280px;border-radius:10px;background:#0e1729;border:1px solid #223257}
-    .status{min-height:22px}
-    .switch{display:flex;align-items:center;gap:8px}
-    .small{font-size:13px}
-    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace}
+    .kvs{display:flex;gap:10px;flex-wrap:wrap}
+    .kv{background:var(--chip);border:1px solid var(--line);padding:6px 10px;border-radius:999px;color:var(--muted)}
+    canvas{width:100%;height:320px;background:#0b1220;border:1px solid #1e293b;border-radius:8px}
+    table{width:100%;border-collapse:collapse}
+    th,td{border-bottom:1px solid var(--line);padding:10px 8px;text-align:left}
+    th{color:#cbd5e1;font-weight:600}
+    .small{font-size:12px}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+    .right{margin-left:auto}
+    .range{width:120px}
+    .pill{padding:4px 8px;border-radius:999px;border:1px solid var(--line);background:#0b1220;color:var(--muted);font-size:12px}
+    .ok{color:var(--ok)} .warn{color:var(--warn)} .bad{color:var(--bad)}
+    a{color:var(--accent)}
   </style>
 </head>
 <body>
-  <div class="wrap">
+  <header>
     <h1>Food Recommender — Two-Tower + Graph</h1>
-    <p class="muted small">
-      In-browser training with TensorFlow.js. Compare <b>Baseline</b> (ID embeddings) vs <b>Deep</b> (MLP + tags). Optional
-      graph re-rank with Personalized PageRank. Ready for static GitHub Pages.
-    </p>
-
-    <div class="tabs">
-      <button class="tab active" data-tab="eda">EDA</button>
-      <button class="tab" data-tab="models">Models</button>
-      <button class="tab" data-tab="demo">Demo</button>
-      <button class="tab" data-tab="metrics">Metrics</button>
+    <div class="sub">
+      In-browser training (TensorFlow.js). Compare <b>Baseline</b> (ID embeddings) vs <b>Deep</b> (MLP + tags).
+      Optional graph re-rank with Personalized PageRank. Ready for static GitHub Pages.
     </div>
+    <div class="tabs">
+      <button class="tab active" data-tab="tab-eda">EDA</button>
+      <button class="tab" data-tab="tab-models">Models</button>
+      <button class="tab" data-tab="tab-demo">Demo</button>
+      <button class="tab" data-tab="tab-metrics">Metrics</button>
+    </div>
+  </header>
 
-    <!-- EDA TAB -->
-    <section id="tab-eda" class="card">
-      <div class="grid">
-        <div class="kv">
-          <button id="btn-load" class="btn">Load Data (from /data)</button>
-          <span id="status-load" class="status muted">Status: waiting…</span>
+  <main>
+    <!-- EDA -->
+    <section id="tab-eda" class="tabpage">
+      <div class="card">
+        <div class="head">
+          <button id="btn-load" class="btn primary">Load Data (from ./data/)</button>
+          <div id="status" class="muted">Status: —</div>
+          <div class="right kvs">
+            <span class="kv" id="kv-users">users: —</span>
+            <span class="kv" id="kv-items">items: —</span>
+            <span class="kv" id="kv-inter">interactions: —</span>
+          </div>
         </div>
+        <div class="body">
+          <div id="status2" class="muted small">—</div>
+        </div>
+      </div>
 
+      <div class="row">
         <div class="card">
-          <div id="eda-counters" class="small mono muted">—</div>
+          <div class="head"><b>Ratings histogram</b></div>
+          <div class="body"><canvas id="chart-ratings"></canvas></div>
         </div>
-
-        <div class="row">
-          <div>
-            <h3>Ratings histogram</h3>
-            <canvas id="chart-ratings" width="560" height="280"></canvas>
-          </div>
-          <div>
-            <h3>Top 20 tags</h3>
-            <canvas id="chart-tags" width="560" height="280"></canvas>
-          </div>
+        <div class="card">
+          <div class="head"><b>Top 20 tags</b></div>
+          <div class="body"><canvas id="chart-tags"></canvas></div>
         </div>
+      </div>
 
-        <div class="row">
-          <div>
-            <h3>User activity (ratings per user)</h3>
-            <canvas id="chart-user-activity" width="560" height="280"></canvas>
-          </div>
-          <div>
-            <h3>Item popularity (ratings per item)</h3>
-            <canvas id="chart-item-pop" width="560" height="280"></canvas>
-          </div>
+      <div class="row">
+        <div class="card">
+          <div class="head"><b>User activity (ratings per user)</b></div>
+          <div class="body"><canvas id="chart-user-activity"></canvas></div>
         </div>
+        <div class="card">
+          <div class="head"><b>Item popularity (ratings per item)</b></div>
+          <div class="body"><canvas id="chart-item-activity"></canvas></div>
+        </div>
+      </div>
 
-        <div class="row">
-          <div>
-            <h3>Popularity long-tail (Lorenz)</h3>
-            <canvas id="chart-lorenz" width="560" height="280"></canvas>
-            <div id="gini" class="small muted mono">Gini: —</div>
-          </div>
-          <div>
-            <h3>Cold-start counts</h3>
-            <table class="table small" id="cold-table">
+      <div class="row">
+        <div class="card">
+          <div class="head"><b>Popularity long-tail (Lorenz)</b> <span id="gini" class="pill">Gini ≈ —</span></div>
+          <div class="body"><canvas id="chart-lorenz"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="head"><b>Cold-start counts</b></div>
+          <div class="body">
+            <table>
               <thead><tr><th>Bucket</th><th>Count</th></tr></thead>
-              <tbody></tbody>
+              <tbody id="cold-table"><tr><td>—</td><td>—</td></tr></tbody>
             </table>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- MODELS TAB -->
-    <section id="tab-models" class="card" style="display:none">
+    <!-- Models -->
+    <section id="tab-models" class="tabpage" style="display:none">
+      <div class="grid4">
+        <label class="pill">embDim <input id="embDim" class="range" type="number" value="32" min="8" max="128"></label>
+        <label class="pill">epochs <input id="epochs" class="range" type="number" value="5" min="1" max="25"></label>
+        <label class="pill">batch <input id="batch" class="range" type="number" value="256" min="32" max="1024" step="32"></label>
+        <label class="pill">lr <input id="lr" class="range" type="number" step="0.001" value="0.001" min="0.0001" max="0.02"></label>
+      </div>
+      <div class="grid4" style="margin-top:8px">
+        <label class="pill">max interactions <input id="maxInter" class="range" type="number" value="80000" min="5000" max="200000" step="5000"></label>
+        <label class="pill">#tag features (deep) <input id="maxTags" class="range" type="number" value="200" min="20" max="2000" step="20"></label>
+      </div>
+
       <div class="row">
-        <div>
-          <h3>Baseline Two-Tower (ID Embeddings)</h3>
-          <div class="kv">
-            <label>embDim <input id="emb-b" type="number" min="8" max="128" value="32"></label>
-            <label>epochs <input id="ep-b" type="number" min="1" max="20" value="5"></label>
-            <label>batch <input id="bs-b" type="number" min="32" max="1024" value="256"></label>
-            <label>lr <input id="lr-b" type="number" step="0.0001" value="0.001"></label>
-            <label>max interactions <input id="maxint" type="number" min="1000" value="80000"></label>
+        <div class="card">
+          <div class="head">
+            <b>Baseline Two-Tower (ID Embeddings)</b>
+            <button id="btn-train-base" class="btn primary right">Train Baseline</button>
+            <span id="base-note" class="muted small right" style="margin-left:8px"></span>
           </div>
-          <div class="kv">
-            <button id="btn-train-b" class="btn">Train Baseline</button>
-            <span id="status-b" class="status muted">Status: —</span>
+          <div class="body">
+            <canvas id="loss-base"></canvas>
           </div>
-          <canvas id="loss-b" width="560" height="280"></canvas>
         </div>
 
-        <div>
-          <h3>Deep Two-Tower (MLP + Tags)</h3>
-          <div class="kv">
-            <label>embDim <input id="emb-d" type="number" min="8" max="128" value="32"></label>
-            <label>epochs <input id="ep-d" type="number" min="1" max="20" value="5"></label>
-            <label>batch <input id="bs-d" type="number" min="32" max="1024" value="256"></label>
-            <label>lr <input id="lr-d" type="number" step="0.0001" value="0.001"></label>
-            <label>#tag features <input id="tags-k" type="number" min="20" max="500" value="200"></label>
+        <div class="card">
+          <div class="head">
+            <b>Deep Two-Tower (MLP + tags)</b>
+            <button id="btn-train-deep" class="btn primary right">Train Deep</button>
+            <span id="deep-note" class="muted small right" style="margin-left:8px"></span>
           </div>
-          <div class="kv">
-            <button id="btn-train-d" class="btn">Train Deep</button>
-            <span id="status-d" class="status muted">Status: —</span>
+          <div class="body">
+            <canvas id="loss-deep"></canvas>
           </div>
-          <canvas id="loss-d" width="560" height="280"></canvas>
         </div>
       </div>
 
       <div class="card">
-        <h3>Item embedding projection (PCA/SVD)</h3>
-        <canvas id="proj" width="1120" height="360"></canvas>
-        <div class="small muted">Tip: train a model first, then the projection appears.</div>
+        <div class="head"><b>Item embedding projection (PCA/SVD)</b>
+          <span class="muted small">Tip: train a model first, then the projection appears.</span>
+        </div>
+        <div class="body"><canvas id="proj2d" style="height:420px"></canvas></div>
       </div>
     </section>
 
-    <!-- DEMO TAB -->
-    <section id="tab-demo" class="card" style="display:none">
-      <div class="kv">
-        <button id="btn-test" class="btn">Test (random user ≥ 20 ratings)</button>
-        <label class="switch"><input type="checkbox" id="use-graph"> <span class="small">Use Graph re-rank (Personalized PageRank)</span></label>
-        <span id="status-test" class="status muted">Status: —</span>
+    <!-- Demo -->
+    <section id="tab-demo" class="tabpage" style="display:none">
+      <div class="card">
+        <div class="head">
+          <button id="btn-test" class="btn primary">Test (random user ≥ 20 ratings)</button>
+          <label class="pill"><input type="checkbox" id="use-graph"> Use Graph re-rank (Personalized PageRank)</label>
+          <span id="test-note" class="muted small right">—</span>
+        </div>
       </div>
 
       <div class="row3">
-        <div>
-          <h3>History — user’s Top-10</h3>
-          <table class="table small" id="hist-table"><thead><tr><th>#</th><th>Recipe</th><th>★</th></tr></thead><tbody></tbody></table>
+        <div class="card">
+          <div class="head"><b>History — user’s Top-10</b></div>
+          <div class="body">
+            <table>
+              <thead><tr><th>#</th><th>Recipe</th><th class="small">★</th></tr></thead>
+              <tbody id="hist-body"></tbody>
+            </table>
+          </div>
         </div>
-        <div>
-          <h3>Baseline Recs (exclude seen)</h3>
-          <table class="table small" id="rec-b"><thead><tr><th>#</th><th>Recipe</th><th>score</th></tr></thead><tbody></tbody></table>
+
+        <div class="card">
+          <div class="head"><b>Baseline Recs (exclude seen)</b></div>
+          <div class="body">
+            <table>
+              <thead><tr><th>#</th><th>Recipe</th><th class="small">score</th></tr></thead>
+              <tbody id="base-recs"></tbody>
+            </table>
+          </div>
         </div>
-        <div>
-          <h3>Deep Recs (MLP + tags)</h3>
-          <table class="table small" id="rec-d"><thead><tr><th>#</th><th>Recipe</th><th>score</th></tr></thead><tbody></tbody></table>
+
+        <div class="card">
+          <div class="head"><b>Deep Recs (MLP + tags)</b></div>
+          <div class="body">
+            <table>
+              <thead><tr><th>#</th><th>Recipe</th><th class="small">score</th></tr></thead>
+              <tbody id="deep-recs"></tbody>
+            </table>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- METRICS TAB -->
-    <section id="tab-metrics" class="card" style="display:none">
-      <h3>Dataset & Training Metrics</h3>
-      <div id="metrics" class="small mono muted">—</div>
+    <!-- Metrics -->
+    <section id="tab-metrics" class="tabpage" style="display:none">
+      <div class="card">
+        <div class="head"><b>Dataset & Training Metrics</b></div>
+        <div class="body">
+          <div id="metrics">—</div>
+        </div>
+      </div>
     </section>
-  </div>
+  </main>
 
-  <!-- libs: TFJS + PapaParse -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-
-  <!-- app code -->
-  <script src="two-tower.js"></script>
-  <script src="graph.js"></script>
-  <script src="app.js"></script>
+  <!-- Libraries (order matters) -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
+  <script src="./two-tower.js"></script>
+  <script src="./graph.js"></script>
+  <script src="./app.js"></script>
 </body>
 </html>
