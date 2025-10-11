@@ -1,142 +1,113 @@
 /* two-tower.js
-   Minimal Two-Tower for retrieval in TF.js.
-
-   Modes:
-   - "baseline": user_id -> emb, item_id -> emb, score = dot(U, I)
-   - "deep":     user_id -> emb; item -> concat(id_emb, tag_bag_emb) -> MLP -> emb
-                 score = dot(U, I_deep)
-
-   Loss: in-batch softmax (sampled softmax with negatives = other items in the batch).
+   Minimal Two-Tower implementations (baseline & deep) + training helpers.
+   Uses in-batch sampled-softmax (logits = U @ I^T, labels = diagonal).
 */
 
-class TwoTowerModel {
-  constructor(opts) {
-    this.numUsers = opts.numUsers;
-    this.numItems = opts.numItems;
-    this.embDim   = opts.embDim || 32;
-    this.mode     = opts.mode || 'baseline';       // 'baseline' | 'deep'
-    this.maxTagId = opts.maxTagId || 0;            // only for deep
-    this.tagDim   = opts.tagDim || Math.max(8, Math.min(32, Math.floor(this.embDim/2)));
-    this.mlpHidden= opts.mlpHidden || [64];
-    this.lr       = opts.lr || 1e-3;
+const TwoTower = (() => {
+  "use strict";
 
-    // Variables (always)
-    this.userEmbedding = tf.variable(tf.randomNormal([this.numUsers, this.embDim], 0, 0.05), true, 'userEmbedding');
-    this.itemEmbedding = tf.variable(tf.randomNormal([this.numItems, this.embDim], 0, 0.05), true, 'itemEmbedding');
+  class TwoTowerModel {
+    constructor(numUsers, numItems, embDim=32){
+      this.numUsers = numUsers;
+      this.numItems = numItems;
+      this.embDim = embDim;
 
-    // Deep-only extras
-    if (this.mode === 'deep') {
-      this.tagEmbedding = tf.variable(tf.randomNormal([this.maxTagId + 1, this.tagDim], 0, 0.05), true, 'tagEmbedding');
-      // MLP weights: input = embDim (id) + tagDim
-      let prev = this.embDim + this.tagDim;
-      this.mlpWeights = [];
-      for (const h of this.mlpHidden) {
-        const w = tf.variable(tf.randomNormal([prev, h], 0, Math.sqrt(2/prev)), true);
-        const b = tf.variable(tf.zeros([h]), true);
-        this.mlpWeights.push({w,b});
-        prev = h;
+      // Embedding tables
+      this.userEmbedding = tf.variable(tf.randomNormal([numUsers, embDim], 0, 0.05), true, "userEmbedding");
+      this.itemEmbedding = tf.variable(tf.randomNormal([numItems, embDim], 0, 0.05), true, "itemEmbedding");
+    }
+    userForward(idx1D){ return tf.gather(this.userEmbedding, idx1D); }
+    itemForward(idx1D){ return tf.gather(this.itemEmbedding, idx1D); }
+    score(uEmb, iEmb){ return tf.sum(tf.mul(uEmb, iEmb), -1); } // dot
+    dispose(){
+      this.userEmbedding.dispose();
+      this.itemEmbedding.dispose();
+    }
+  }
+
+  // Deep tower: same user embedding; item tower = (ID emb + tag MLP)
+  class TwoTowerDeep extends TwoTowerModel {
+    constructor(numUsers, numItems, embDim, tagMatrix, tagDim){
+      super(numUsers, numItems, embDim);
+      // tagMatrix: Float32Array (numItems x tagDim)
+      this.tagDim = tagDim|0;
+      this.tagTensor = tf.tensor2d(tagMatrix, [numItems, this.tagDim], "float32");
+      // simple MLP: tagDim -> 128 -> embDim
+      this.w1 = tf.variable(tf.randomNormal([this.tagDim, 128], 0, 0.05), true, "w1");
+      this.b1 = tf.variable(tf.zeros([128]), true, "b1");
+      this.w2 = tf.variable(tf.randomNormal([128, embDim], 0, 0.05), true, "w2");
+      this.b2 = tf.variable(tf.zeros([embDim]), true, "b2");
+    }
+    itemForward(idx1D){
+      const idEmb = super.itemForward(idx1D); // [B, D]
+      const tags = tf.gather(this.tagTensor, idx1D); // [B, K]
+      const mlp = tf.relu(tags.matMul(this.w1).add(this.b1)).matMul(this.w2).add(this.b2); // [B,D]
+      return idEmb.add(mlp.mul(0.5)); // blend
+    }
+    dispose(){
+      super.dispose();
+      this.tagTensor.dispose(); this.w1.dispose(); this.b1.dispose(); this.w2.dispose(); this.b2.dispose();
+    }
+  }
+
+  async function trainInBatchSoftmax(model, batches, cfg){
+    const epochs = cfg.epochs|0;
+    const bs     = cfg.batchSize|0;
+    const lr     = cfg.lr || 0.001;
+    const opt = tf.train.adam(lr);
+
+    // prepack integers into tensors
+    const U = batches.map(b => b.u);
+    const I = batches.map(b => b.i);
+
+    for (let ep=0; ep<epochs; ep++){
+      // shuffle indices
+      const order = tf.util.createShuffledIndices(batches.length);
+      for (let s=0; s<order.length; s+=bs){
+        const idx = order.slice(s, s+bs);
+        const u = tf.tensor1d(idx.map(j => U[j]), "int32");
+        const i = tf.tensor1d(idx.map(j => I[j]), "int32");
+
+        const lossVal = opt.minimize(() => {
+          const uEmb = model.userForward(u); // [B,D]
+          const iEmb = model.itemForward(i); // [B,D]
+          const logits = uEmb.matMul(iEmb.transpose()); // [B,B]
+          const labels = tf.tensor1d([...Array(idx.length).keys()], "int32"); // 0..B-1
+          const loss = tf.losses.softmaxCrossEntropy(tf.oneHot(labels, idx.length), logits);
+          return loss;
+        }, true);
+
+        const l = (await lossVal.data())[0];
+        lossVal.dispose(); u.dispose(); i.dispose();
+        if (cfg.onBatchEnd) cfg.onBatchEnd(s/bs + ep*(Math.ceil(order.length/bs)), l);
+        await tf.nextFrame();
       }
-      // Output proj to embDim
-      this.outW = tf.variable(tf.randomNormal([prev, this.embDim], 0, Math.sqrt(2/prev)), true);
-      this.outB = tf.variable(tf.zeros([this.embDim]), true);
     }
-
-    this.optimizer = tf.train.adam(this.lr);
   }
 
-  // Gather rows by int32 indices -> [B, D]
-  static gather(table, idx1D) { return tf.gather(table, idx1D.flatten()); }
-
-  userForward(userIdx) {
-    return TwoTowerModel.gather(this.userEmbedding, userIdx);
+  async function scoreAllItems(model, userIdx){
+    const u = tf.tensor1d([userIdx], "int32");
+    const uEmb = model.userForward(u).squeeze(); // [D]
+    const scores = tf.matMul(model.itemEmbedding, uEmb.expandDims(1)).squeeze(); // [numItems]
+    const arr = Array.from(await scores.data());
+    u.dispose(); uEmb.dispose(); scores.dispose();
+    return arr;
   }
 
-  // For baseline: just id embedding.
-  itemForwardBaseline(itemIdx) {
-    return TwoTowerModel.gather(this.itemEmbedding, itemIdx);
+  // Fast PCA-ish projection using SVD (tfjs) on item embeddings
+  async function projectItems2D(model){
+    const E = model.itemEmbedding; // [N,D]
+    const { u, s, v } = tf.linalg.svd(E, true); // u:[N,N] (thin), v:[D,D]
+    const two = v.slice([0,0],[v.shape[0],2]); // [D,2]
+    const proj = E.matMul(two); // [N,2]
+    const data = await proj.array(); // [[x,y], ...]
+    two.dispose(); proj.dispose(); u.dispose(); s.dispose(); v.dispose();
+    return data;
   }
 
-  // For deep: id emb + tag-bag emb -> MLP -> D
-  // tagBag: ragged representation given as {indices: Int32Array, splits: Int32Array}
-  // where splits len = B+1, spans in indices for each item in batch.
-  itemForwardDeep(itemIdx, tagBag) {
-    const idEmb = TwoTowerModel.gather(this.itemEmbedding, itemIdx); // [B,D]
-    const B = idEmb.shape[0];
+  return { TwoTowerModel, TwoTowerDeep, trainInBatchSoftmax, scoreAllItems, projectItems2D };
+})();
 
-    // Bag-mean tag embedding
-    const indices = tf.tensor1d(tagBag.indices, 'int32');
-    const splits  = tf.tensor1d(tagBag.splits, 'int32'); // len B+1
-    const tagRows = tf.gather(this.tagEmbedding, indices); // [NNZ, tagDim]
-
-    // segmentMean by ragged splits
-    const counts = tf.sub(splits.slice(1), splits.slice(0, B)); // [B]
-    const segIds = tf.tidy(() => tf.concat(
-      Array.from({length:B}, (_,i) => tf.fill([counts.arraySync()[i]], i)), 0
-    ));
-    const summed = tf.unsortedSegmentSum(tagRows, segIds, B); // [B, tagDim]
-    const denom  = tf.maximum(1, counts).reshape([B,1]);
-    const tagMean = tf.div(summed, denom);
-
-    // concat & MLP (ReLU)
-    let x = tf.concat([idEmb, tagMean], 1);
-    for (const {w,b} of this.mlpWeights) x = tf.relu(tf.add(tf.matMul(x, w), b));
-    const out = tf.add(tf.matMul(x, this.outW), this.outB);   // [B,embDim]
-
-    indices.dispose(); splits.dispose(); tagRows.dispose(); counts.dispose(); segIds.dispose(); summed.dispose(); denom.dispose();
-    return out;
-  }
-
-  itemForward(itemIdx, tagBagOpt) {
-    return (this.mode === 'deep')
-      ? this.itemForwardDeep(itemIdx, tagBagOpt)
-      : this.itemForwardBaseline(itemIdx);
-  }
-
-  // In-batch softmax loss: logits = U · I^T, labels = diagonal
-  lossInBatch(usersEmb, itemsEmb) {
-    const logits = tf.matMul(usersEmb, itemsEmb, false, true); // [B,B]
-    const labels = tf.tensor1d(Array.from({length:logits.shape[0]}, (_,i)=>i), 'int32');
-    const ce = tf.losses.softmaxCrossEntropy(tf.oneHot(labels, logits.shape[1]), logits).mean();
-    labels.dispose();
-    return ce;
-  }
-
-  // Single training step on one batch
-  // batch: {uIdx: Int32Array, iIdx: Int32Array, tagBag?: {indices:Int32Array,splits:Int32Array}}
-  trainStep(batch) {
-    return this.optimizer.minimize(() => {
-      const uIdx = tf.tensor1d(batch.uIdx, 'int32');
-      const iIdx = tf.tensor1d(batch.iIdx, 'int32');
-      const uEmb = this.userForward(uIdx);
-      const iEmb = this.itemForward(iIdx, batch.tagBag);
-      const loss = this.lossInBatch(uEmb, iEmb);
-      uIdx.dispose(); iIdx.dispose(); uEmb.dispose(); iEmb.dispose();
-      return loss;
-    }, true).dataSync()[0];
-  }
-
-  // Inference helpers
-  getUserEmbedding(uIdx) {
-    return tf.tidy(()=>this.userEmbedding.gather(tf.tensor1d([uIdx],'int32')).squeeze());
-  }
-
-  // Returns [numItems, embDim] tensor
-  getAllItemEmbeddings(itemTagRaggedOpt) {
-    if (this.mode === 'baseline') return this.itemEmbedding;
-    // Deep: compute in manageable batches, return stacked (as a tensor)
-    const B = 1024;
-    const out = [];
-    for (let start = 0; start < this.numItems; start += B) {
-      const end = Math.min(this.numItems, start + B);
-      const idx = tf.tensor1d([...Array(end-start).keys()].map(i=>i+start), 'int32');
-      const tagBag = itemTagRaggedOpt.slice(start, end);
-      const emb = this.itemForwardDeep(idx, tagBag);
-      out.push(emb);
-      idx.dispose();
-    }
-    return tf.concat(out, 0);
-  }
-}
-
-if (typeof window !== 'undefined') window.TwoTowerModel = TwoTowerModel;
-export { TwoTowerModel };
+// Re-export classes to global for app.js to use
+const TwoTowerModel = TwoTower.TwoTowerModel;
+const TwoTowerDeep  = TwoTower.TwoTowerDeep;
