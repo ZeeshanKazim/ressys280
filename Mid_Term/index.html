@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Food Recommender — Two‑Tower + Graph</title>
+  <title>Food Recommender — Two-Tower + Graph</title>
 
-  <!-- Fonts + minimal dark UI -->
+  <!-- minimal, modern, Netflix-dark skin -->
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
   <style>
@@ -31,20 +31,20 @@
     .g3{grid-template-columns:1fr 1fr 1fr}
     canvas{width:100%;height:260px;background:var(--card);border:1px solid var(--line);border-radius:10px;display:block}
     table{width:100%;border-collapse:collapse}
-    th,td{padding:10px;border-bottom:1px solid var(--line);text-align:left}
+    th,td{padding:10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
     th{color:#cbd5e1;font-weight:600}
     .muted{color:var(--muted)}
     .pill{display:inline-flex;align-items:center;gap:6px;background:#0b1220;border:1px solid #1f2937;border-radius:999px;padding:6px 10px;color:#cbd5e1}
-    input[type="number"],input[type="text"]{background:#0b1220;border:1px solid #1f2937;border-radius:8px;color:#e5e7eb;padding:8px 10px;width:90px}
+    input[type="number"],input[type="text"]{background:#0b1220;border:1px solid #1f2937;border-radius:8px;color:#e5e7eb;padding:8px 10px;width:88px}
     .ok{color:var(--ok)} .bad{color:var(--bad)}
     .hidden{display:none}
-    .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace}
+    .note{font-size:12px;color:var(--muted)}
   </style>
 </head>
 <body>
   <header>
-    <h1>Food Recommender — Two‑Tower + Graph</h1>
-    <p>In‑browser training with TensorFlow.js. Compare <b>Baseline</b> (ID embeddings) vs <b>Deep</b> (MLP + tags). Optional graph re‑rank with Personalized PageRank. Ready for static GitHub Pages.</p>
+    <h1>Food Recommender — Two-Tower + Graph</h1>
+    <p>In-browser training with TensorFlow.js. Compare <b>Baseline</b> (ID embeddings) vs <b>Deep</b> (MLP + tags). Optional graph re-rank with Personalized PageRank. Ready for static GitHub Pages.</p>
     <nav>
       <button class="tab active" data-tab="eda">EDA</button>
       <button class="tab" data-tab="models">Models</button>
@@ -62,7 +62,7 @@
         <span id="status" class="muted">Status: —</span>
       </div>
 
-      <div class="card muted mono" id="datasetLine">—</div>
+      <div class="card muted" id="datasetLine">—</div>
 
       <div class="grid g2">
         <div class="card">
@@ -88,48 +88,50 @@
 
       <div class="grid g2">
         <div class="card">
-          <h3>Popularity long‑tail (Lorenz)</h3>
+          <h3>Popularity long-tail (Lorenz)</h3>
           <canvas id="lorenz"></canvas>
           <div class="muted" id="giniLine" style="margin-top:6px">Gini ≈ —</div>
         </div>
         <div class="card">
-          <h3>Cold‑start counts</h3>
+          <h3>Cold-start counts</h3>
           <table>
             <thead><tr><th>Bucket</th><th>Count</th></tr></thead>
             <tbody id="coldTbl"><tr><td class="muted">—</td><td>—</td></tr></tbody>
           </table>
         </div>
       </div>
+
+      <p class="note">Tip: Place <code>PP_recipes.csv</code> (or <code>RAW_recipes.csv</code>) and <code>interactions_train.csv</code> next to this page or under <code>/data/</code>. The loader tries both.</p>
     </section>
 
     <!-- MODELS -->
     <section id="models" class="tabpane hidden">
       <div class="grid g2">
         <div class="card">
-          <h3>Baseline Two‑Tower (ID embeddings)</h3>
+          <h3>Baseline Two-Tower (ID embeddings)</h3>
           <div class="toolbar">
             <label class="pill">embDim <input id="bEmb" type="number" value="32" min="8" max="128"></label>
             <label class="pill">epochs <input id="bEp" type="number" value="5" min="1" max="20"></label>
-            <label class="pill">batch <input id="bBa" type="number" value="256" min="32" max="1024"></label>
+            <label class="pill">batch <input id="bBa" type="number" value="256" min="32" max="2048"></label>
             <label class="pill">lr <input id="bLr" type="text" value="0.001"></label>
             <label class="pill">max interactions <input id="bMax" type="number" value="80000"></label>
             <button id="trainBase">Train Baseline</button>
           </div>
-          <div class="muted mono" id="baseLine">Baseline: —</div>
+          <div class="muted" id="baseLine">Baseline: —</div>
           <canvas id="baseLoss"></canvas>
         </div>
 
         <div class="card">
-          <h3>Deep Two‑Tower (MLP + tags)</h3>
+          <h3>Deep Two-Tower (MLP + tags)</h3>
           <div class="toolbar">
             <label class="pill">embDim <input id="dEmb" type="number" value="32" min="8" max="128"></label>
             <label class="pill">epochs <input id="dEp" type="number" value="5" min="1" max="20"></label>
-            <label class="pill">batch <input id="dBa" type="number" value="256" min="32" max="1024"></label>
+            <label class="pill">batch <input id="dBa" type="number" value="256" min="32" max="2048"></label>
             <label class="pill">lr <input id="dLr" type="text" value="0.001"></label>
-            <label class="pill">#tag features <input id="dK" type="number" value="200" min="32" max="1024"></label>
+            <label class="pill">#tag features <input id="dK" type="number" value="200" min="32" max="2048"></label>
             <button id="trainDeep">Train Deep</button>
           </div>
-          <div class="muted mono" id="deepLine">Deep: —</div>
+          <div class="muted" id="deepLine">Deep: —</div>
           <canvas id="deepLoss"></canvas>
         </div>
       </div>
@@ -147,12 +149,12 @@
         <div class="toolbar">
           <button id="btnTest">Test (random user ≥ minRatings)</button>
           <label class="pill">minRatings <input id="minRatings" type="number" value="5" min="1" max="50"></label>
-          <label class="pill"><input id="useGraph" type="checkbox"> Use Graph re‑rank (Personalized PageRank)</label>
-          <span id="demoLine" class="muted mono">—</span>
+          <label class="pill"><input id="useGraph" type="checkbox"> Use Graph re-rank (Personalized PageRank)</label>
+          <span id="demoLine" class="muted">—</span>
         </div>
         <div class="grid g3">
           <div>
-            <h3>History — user’s Top‑10</h3>
+            <h3>History — user’s Top-10</h3>
             <table><thead><tr><th>#</th><th>Recipe</th><th>★</th></tr></thead><tbody id="histTbl"></tbody></table>
           </div>
           <div>
@@ -165,18 +167,19 @@
           </div>
         </div>
       </div>
+      <p class="note">If a table shows “—”, it means there were no candidates or the model hasn’t been trained yet.</p>
     </section>
 
     <!-- METRICS -->
     <section id="metrics" class="tabpane hidden">
       <div class="card">
         <h3>Dataset & Training Metrics</h3>
-        <div id="metricsBody" class="muted mono">—</div>
+        <div id="metricsBody" class="muted">—</div>
       </div>
     </section>
   </div>
 
-  <!-- Scripts (same folder as index.html) -->
+  <!-- Scripts -->
   <script defer src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.18.0/dist/tf.min.js"></script>
   <script defer src="two-tower.js"></script>
   <script defer src="graph.js"></script>
