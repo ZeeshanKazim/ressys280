@@ -1,596 +1,646 @@
-/* app.js – data loading, charts, training, demo, metrics */
+/* app.js — Food Recommender (Two-Tower + optional Deep tower + Graph)
+   Works on GitHub Pages (relative /data/*.csv, no leading slash).
+   Requires: two-tower.js (exports TwoTowerModel, TwoTowerDeepModel)
+   Author: you :)
+*/
 
-///////////////////////
-// Simple DOM helpers
-///////////////////////
-const $ = (id) => document.getElementById(id);
-const fmt = (n) => n.toLocaleString();
+/* ------------------------- tiny DOM helpers ------------------------- */
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+const pick = (...idsOrSelectors) => {
+  for (const id of idsOrSelectors) {
+    const el = id.startsWith('#') || id.startsWith('.') ? $(id) : $(`#${id}`);
+    if (el) return el;
+  }
+  return null;
+};
+const setText = (el, txt) => { if (el) el.textContent = txt; };
 
-///////////////////////
-// Global state
-///////////////////////
+/* ------------------------- status & wiring -------------------------- */
+const statusEl = pick('status', 'statusText', 'edaStatus', '#status', '#edaStatus', '[data-role="status"]');
+function setStatus(msg) { setText(statusEl, `Status: ${msg}`); }
+
+/* --------------------------- global state --------------------------- */
 let users = new Set();
-let items = new Map();     // itemId -> { title, tags: string[] }
-let train = [];            // [{u,i,r,ts}]
-let valid = [];
-let user2items = new Map();// userId -> [{i,r,ts}]
-let item2users = new Map();// itemId -> Set(userId)
+let items = new Map();         // itemId -> { id, name, tags, minutes, n_steps, n_ingredients }
+let interactions = [];         // { userId, itemId, rating, ts }
 
-let userIndex = new Map(), itemIndex = new Map();
-let idx2user = [], idx2item = [];
+let userIdToIdx = new Map();
+let itemIdToIdx = new Map();
+let idxToUserId = [];
+let idxToItemId = [];
 
-let tag2idx = new Map(), idx2tag = [];
-let topTagK = 200; // configurable in UI
+let baseline = null;           // TwoTowerModel
+let deepModel = null;          // TwoTowerDeepModel
+let tensors = null;            // cached training tensors
 
-// Models (baseline = pure ID towers, deep = ID user + MLP item-tags)
-let baseline = null;
-let deep = null;
+// EDA caches
+let topTagCounts = [];
+let userActivityHist = null;
+let itemPopularityHist = null;
+let ratingsHist = null;
 
-// Loss traces for charts
-let baseLossTrace = [];
-let deepLossTrace = [];
+// UI elements (try multiple common IDs to avoid 404 wiring)
+const btnLoad   = pick('btnLoadData', 'loadDataBtn', 'loadBtn', '#btnLoadData', '#loadBtn');
+const btnTrainB = pick('btnTrainBase', 'trainBaselineBtn', '#btnTrainBase');
+const btnTrainD = pick('btnTrainDeep', 'trainDeepBtn', '#btnTrainDeep');
+const btnTest   = pick('btnTest', 'testBtn', '#btnTest');
 
-// Last trained item embeddings (for projection / demo)
-let lastItemEmb = null;   // tf.Tensor2D [numItems, embDim]
-let lastItemEmbDeep = null;
+const cvRatings = pick('histRatings', 'eda_ratings_hist', '#histRatings');
+const cvTags    = pick('barTopTags', 'eda_top_tags', '#barTopTags');
+const cvUserA   = pick('histUserActivity', 'eda_user_activity', '#histUserActivity');
+const cvItemP   = pick('histItemPopularity', 'eda_item_popularity', '#histItemPopularity');
+const cvBaseLoss= pick('baseLossCanvas', 'lossBaseline', '#baseLossCanvas');
+const cvDeepLoss= pick('deepLossCanvas', 'lossDeep', '#deepLossCanvas');
+const projCanvas= pick('projCanvas', 'pcaCanvas', '#projCanvas');
 
-///////////////////////
-// Tab behavior
-///////////////////////
-document.querySelectorAll(".tab").forEach(btn => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".tab").forEach(b=>b.classList.remove("active"));
-    btn.classList.add("active");
-    document.querySelectorAll(".tabpane").forEach(p=>p.classList.add("hidden"));
-    $(btn.dataset.tab).classList.remove("hidden");
-  });
-});
+const tblDemoHistory = pick('demoHistTable', '#demoHistTable');
+const tblDemoBase    = pick('demoBaseTable', '#demoBaseTable');
+const tblDemoDeep    = pick('demoDeepTable', '#demoDeepTable');
 
-///////////////////////
-// Data Loading
-///////////////////////
-async function loadCSV(path) {
-  const resp = await fetch(path);
-  if (!resp.ok) throw new Error(`fetch failed: ${path}`);
-  return await resp.text();
+const inpEmbB   = pick('embDimBase', '#embDimBase');
+const inpEmbD   = pick('embDimDeep', '#embDimDeep');
+const inpEpochB = pick('epochsBase', '#epochsBase');
+const inpEpochD = pick('epochsDeep', '#epochsDeep');
+const inpBatchB = pick('batchBase', '#batchBase');
+const inpBatchD = pick('batchDeep', '#batchDeep');
+const inpLrB    = pick('lrBase', '#lrBase');
+const inpLrD    = pick('lrDeep', '#lrDeep');
+const inpMaxInt = pick('maxInteractions', '#maxInteractions');
+const inpTagFe  = pick('tagFeatures', '#tagFeatures');
+const chkGraphRerank = pick('useGraph', '#useGraph'); // optional; ignored if absent
+
+/* --------------------------- CSV utilities -------------------------- */
+
+// Robust CSV line splitter (handles commas in quotes)
+function splitCSVLine(line) {
+  const out = [];
+  let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') {
+      if (inQ && line[i + 1] === '"') { cur += '"'; i++; }
+      else inQ = !inQ;
+    } else if (c === ',' && !inQ) {
+      out.push(cur); cur = '';
+    } else {
+      cur += c;
+    }
+  }
+  out.push(cur);
+  return out;
 }
 
-// Robust CSV splitter (no quoted fields needed for these Kaggle files)
-function splitLines(text) {
-  return text.split(/\r?\n/).filter(Boolean);
+async function fetchTextOrThrow(path) {
+  const res = await fetch(`${path}?v=${Date.now()}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`fetch ${path} → ${res.status}`);
+  return res.text();
 }
 
-function parseRecipes(csvText){
-  // Expect columns like: id,name,tags,... (RAW_recipes or recipes)
-  // We only need id, name/title, tags (string like "['tag1','tag2',...]")
-  const lines = splitLines(csvText);
-  const header = lines.shift().split(",");
-  const idIdx = header.findIndex(h => /(^|_)id$/.test(h));
-  const nameIdx = header.findIndex(h => /(name|title)/i.test(h));
-  const tagsIdx = header.findIndex(h => /tags/i.test(h));
-  for (const ln of lines){
-    const parts = ln.split(/,(.+)/); // id, rest
-    // safer parse (allow commas in title by reading CSV simply)
-    const cols = ln.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/g);
-    const id = parseInt(cols[idIdx],10);
-    if (Number.isNaN(id)) continue;
-    const title = (cols[nameIdx]||`Recipe ${id}`).replace(/^"|"$/g,'');
+// Try multiple candidates until one succeeds (for GH Pages + case sensitivity)
+async function loadFirstAvailable(paths) {
+  let lastErr = null;
+  for (const p of paths) {
+    try {
+      const txt = await fetchTextOrThrow(p);
+      return { path: p, text: txt };
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error('No file found');
+}
+
+/* --------------------------- data loading --------------------------- */
+function parseInteractionsCSV(text) {
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  const head = splitCSVLine(lines[0]).map(s => s.trim().toLowerCase());
+  const colUser = head.indexOf('user_id') >= 0 ? 'user_id' : head.indexOf('user') >= 0 ? 'user' : null;
+  const colItem = head.indexOf('recipe_id') >= 0 ? 'recipe_id' : head.indexOf('item_id') >= 0 ? 'item_id' : 'item';
+  const colRating = head.indexOf('rating') >= 0 ? 'rating' : null;
+  const colDate = head.indexOf('date') >= 0 ? 'date' : head.indexOf('timestamp') >= 0 ? 'timestamp' : null;
+
+  const idxU = head.indexOf(colUser);
+  const idxI = head.indexOf(colItem);
+  const idxR = colRating ? head.indexOf(colRating) : -1;
+  const idxT = colDate ? head.indexOf(colDate) : -1;
+
+  const out = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = splitCSVLine(lines[i]);
+    if (idxU < 0 || idxI < 0 || idxU >= cols.length || idxI >= cols.length) continue;
+    const u = cols[idxU].trim();
+    const it = cols[idxI].trim();
+    const r = (idxR >= 0 && idxR < cols.length) ? Number(cols[idxR]) : 1;
+    const ts = (idxT >= 0 && idxT < cols.length) ? (Date.parse(cols[idxT]) || 0) : 0;
+    if (!u || !it) continue;
+    out.push({ userId: u, itemId: it, rating: isFinite(r) ? r : 1, ts });
+  }
+  return out;
+}
+
+function parseRecipesCSV(text) {
+  // We only need: id, name/title, tags (as array), minutes, n_steps, n_ingredients
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  const head = splitCSVLine(lines[0]).map(s => s.trim().toLowerCase());
+  const idxId = head.indexOf('id');
+  const idxName = head.indexOf('name') >= 0 ? head.indexOf('name') : head.indexOf('title');
+  const idxTags = head.indexOf('tags');
+  const idxMin = head.indexOf('minutes');
+  const idxSteps = head.indexOf('n_steps');
+  const idxIngr = head.indexOf('n_ingredients');
+
+  const map = new Map();
+  for (let i = 1; i < lines.length; i++) {
+    const cols = splitCSVLine(lines[i]);
+    const id = cols[idxId]?.trim();
+    if (!id) continue;
+    const name = (idxName >= 0 && cols[idxName]) ? cols[idxName].trim() : `Recipe ${id}`;
+    const rawTags = (idxTags >= 0 && cols[idxTags]) ? cols[idxTags].trim() : '[]';
+    const minutes = (idxMin >= 0) ? Number(cols[idxMin]) : NaN;
+    const n_steps = (idxSteps >= 0) ? Number(cols[idxSteps]) : NaN;
+    const n_ing = (idxIngr >= 0) ? Number(cols[idxIngr]) : NaN;
+
+    // tags look like "['tag1','tag2']" → make JSON safe, then parse
     let tags = [];
-    if (tagsIdx >= 0 && cols[tagsIdx]){
-      let raw = cols[tagsIdx];
-      // convert python list string -> array
-      raw = raw.replace(/^\s*\[|\]\s*$/g,"");
-      tags = raw.split(/['"]\s*,\s*['"]|,\s*/g)
-                .map(s=>s.replace(/^\s*['"]?|['"]?\s*$/g,'').trim())
-                .filter(Boolean)
-                .slice(0,20);
-    }
-    items.set(id, {title, tags});
-  }
-}
-
-function parseInteractions(csvText, sink){
-  const lines = splitLines(csvText);
-  const header = lines.shift().split(",");
-  // RAW_interactions has: user_id,recipe_id,date, ... , rating (sometimes)
-  // Interactions from the Kaggle split we created: user_id,item_id,rating,timestamp
-  const uIdx = header.findIndex(h=>/user/.test(h));
-  const iIdx = header.findIndex(h=>/(item|recipe)_?id/i.test(h));
-  const rIdx = header.findIndex(h=>/rating/i.test(h));
-  const tIdx = header.findIndex(h=>/(time|date)/i.test(h));
-  for (const ln of lines){
-    const cols = ln.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/g);
-    const u = parseInt(cols[uIdx],10);
-    const i = parseInt(cols[iIdx],10);
-    if (!Number.isInteger(u) || !Number.isInteger(i)) continue;
-    const r = rIdx>=0 ? parseFloat(cols[rIdx]) : 1;
-    const ts = tIdx>=0 ? Date.parse(cols[tIdx]) || 0 : 0;
-    sink.push({u,i,r,ts});
-    users.add(u);
-    if (!user2items.has(u)) user2items.set(u,[]);
-    user2items.get(u).push({i,r,ts});
-    if (!item2users.has(i)) item2users.set(i,new Set());
-    item2users.get(i).add(u);
-  }
-}
-
-function buildIndexers(){
-  idx2user = Array.from(users).sort((a,b)=>a-b);
-  idx2item = Array.from(items.keys()).sort((a,b)=>a-b);
-  userIndex = new Map(idx2user.map((u,idx)=>[u,idx]));
-  itemIndex = new Map(idx2item.map((i,idx)=>[i,idx]));
-}
-
-function buildTagVocab(k){
-  topTagK = k;
-  const freq = new Map();
-  for (const it of items.values()){
-    for (const t of (it.tags||[])){ freq.set(t,(freq.get(t)||0)+1); }
-  }
-  const top = Array.from(freq.entries()).sort((a,b)=>b[1]-a[1]).slice(0,k);
-  tag2idx = new Map(top.map(([t],i)=>[t,i]));
-  idx2tag = top.map(([t])=>t);
-}
-
-async function handleLoad(){
-  try{
-    $('status').textContent = 'Status: loading…';
-    // Load CSVs from /data
-    const [recTxt, trTxt, vaTxt] = await Promise.all([
-      loadCSV('data/recipes.csv'),
-      loadCSV('data/interactions_train.csv'),
-      loadCSV('data/interactions_validation.csv')
-    ]);
-
-    // Parse
-    items.clear(); users.clear(); train.length=0; valid.length=0;
-    user2items.clear(); item2users.clear();
-
-    parseRecipes(recTxt);
-    parseInteractions(trTxt, train);
-    parseInteractions(vaTxt, valid);
-
-    buildIndexers();
-    buildTagVocab(parseInt($('dK').value,10));
-
-    // EDA quick lines
-    const density = (train.length / (users.size * Math.max(1, items.size))).toExponential(2);
-    const coldUsers = Array.from(user2items.entries()).filter(([u,arr])=>arr.length<5).length;
-    const coldItems = Array.from(items.keys()).filter(i=>!item2users.has(i) || item2users.get(i).size<5).length;
-
-    $('datasetLine').textContent =
-      `Users: ${fmt(users.size)} Items: ${fmt(items.size)} Interactions (train): ${fmt(train.length)} `+
-      `Density: ${density} Ratings present: ${train.some(x=>x.r!=null) ? 'yes':'no'} `+
-      `Cold users (<5): ${fmt(coldUsers)} Cold items (<5): ${fmt(coldItems)}`;
-    $('status').textContent = 'Status: loaded.';
-    drawAllEDA();
-  }catch(err){
-    console.error(err);
-    $('status').textContent = 'Status: fetch failed. Ensure /data/*.csv exist (case-sensitive).';
-  }
-}
-
-///////////////////////
-// EDA charts
-///////////////////////
-function clearCanvas(ctx){
-  const {canvas:c} = ctx; ctx.clearRect(0,0,c.width,c.height);
-  // Upscale for HiDPI
-  const dpr = window.devicePixelRatio||1;
-  c.width = c.clientWidth * dpr; c.height = c.clientHeight * dpr;
-  ctx.scale(dpr,dpr);
-}
-
-function drawBars(id, buckets, maxVal){
-  const ctx = $(id).getContext('2d'); clearCanvas(ctx);
-  const W = ctx.canvas.clientWidth, H = ctx.canvas.clientHeight;
-  const pad = 28, bw = (W-pad*2)/buckets.length-6, base = H-pad;
-  const scale = (v)=> (v/maxVal) * (H-pad*2);
-  ctx.strokeStyle = "#223047"; ctx.beginPath(); ctx.moveTo(pad,base+0.5); ctx.lineTo(W-pad,base+0.5); ctx.stroke();
-  ctx.fillStyle = "#ffffff";
-  buckets.forEach((v,i)=>{
-    const h = scale(v);
-    const x = pad + i*(bw+6);
-    ctx.fillRect(x, base - h, bw, h);
-  });
-}
-
-function drawLine(id, points){
-  const ctx = $(id).getContext('2d'); clearCanvas(ctx);
-  const W = ctx.canvas.clientWidth, H = ctx.canvas.clientHeight;
-  if (!points.length) return;
-  const pad = 20, base = H-pad;
-  const maxY = Math.max(...points.map(p=>p.y)) || 1;
-  const maxX = Math.max(...points.map(p=>p.x)) || 1;
-  const sx = (x)=> pad + (x/maxX)*(W-pad*2);
-  const sy = (y)=> base - (y/maxY)*(H-pad*2);
-  ctx.strokeStyle = "#7dd3fc"; ctx.beginPath();
-  ctx.moveTo(sx(points[0].x), sy(points[0].y));
-  for (let k=1;k<points.length;k++){ ctx.lineTo(sx(points[k].x), sy(points[k].y)); }
-  ctx.stroke();
-}
-
-function drawAllEDA(){
-  // Ratings hist
-  const hist = [0,0,0,0,0];
-  for (const r of train){ const v = Math.round(Math.max(1,Math.min(5,r.r||1))); hist[v-1]++; }
-  drawBars('histRatings', hist, Math.max(...hist,1));
-
-  // User activity buckets
-  const ucnt = new Map(); for (const r of train){ ucnt.set(r.u,(ucnt.get(r.u)||0)+1); }
-  const userBuckets = [0,0,0,0,0,0,0,0]; // 1,2-2,3-3,4-5,6-10,11-20,21-50,>50
-  for (const v of ucnt.values()){
-    const idx = v===1?0: v<=2?1: v<=3?2: v<=5?3: v<=10?4: v<=20?5: v<=50?6:7;
-    userBuckets[idx]++;
-  }
-  drawBars('histUser', userBuckets, Math.max(...userBuckets,1));
-
-  // Item popularity buckets
-  const icnt = new Map(); for (const r of train){ icnt.set(r.i,(icnt.get(r.i)||0)+1); }
-  const itemBuckets = [0,0,0,0,0,0,0,0,0]; // 1,2-2,3-3,6-10,... >500
-  for (const v of icnt.values()){
-    const idx = v===1?0: v<=2?1: v<=3?2: v<=5?3: v<=10?4: v<=20?5: v<=100?6: v<=500?7:8;
-    itemBuckets[idx]++;
-  }
-  drawBars('histItem', itemBuckets, Math.max(...itemBuckets,1));
-
-  // Top tags
-  const tagFreq = Array.from(tag2idx.keys()).map(t=>[t,0]);
-  const freqMap = new Map(tagFreq);
-  for (const it of items.values()){
-    for (const t of it.tags||[]) if (freqMap.has(t)) freqMap.set(t, freqMap.get(t)+1);
-  }
-  const top20 = Array.from(freqMap.entries()).sort((a,b)=>b[1]-a[1]).slice(0,20);
-  drawBars('topTags', top20.map(([,c])=>c), Math.max(...top20.map(([,c])=>c),1));
-
-  // Long-tail Lorenz + Gini
-  const counts = Array.from(icnt.values()).sort((a,b)=>a-b);
-  const total = counts.reduce((s,v)=>s+v,0) || 1;
-  let acc=0; const lor = counts.map(v=>{ acc+=v; return acc/total; });
-  const ctx = $('lorenz').getContext('2d'); clearCanvas(ctx);
-  const W = ctx.canvas.clientWidth, H = ctx.canvas.clientHeight, pad=24;
-  // diagonal
-  ctx.strokeStyle="#334155"; ctx.beginPath();
-  ctx.moveTo(pad,H-pad); ctx.lineTo(W-pad,pad); ctx.stroke();
-  // lorenz
-  ctx.strokeStyle="#22d3ee"; ctx.beginPath();
-  counts.forEach((_,i)=>{
-    const x = pad + (i/(counts.length-1||1))*(W-pad*2);
-    const y = H-pad - lor[i]*(H-pad*2);
-    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
-  });
-  ctx.stroke();
-  // Gini
-  const gini = 1 - 2 * lor.reduce((s,y,i)=> s + y/(counts.length||1), 0) / (counts.length||1);
-  $('giniLine').textContent = `Gini ≈ ${gini.toFixed(3)}`;
-
-  // Cold table
-  const coldUsers = userBuckets[0] + userBuckets[1]; // <=2
-  const coldItems = itemBuckets[0] + itemBuckets[1]; // <=2
-  const top1pctCut = Math.max(1, Math.floor(0.01*idx2item.length));
-  const topItems = Array.from(icnt.entries()).sort((a,b)=>b[1]-a[1]).slice(0, top1pctCut);
-  const covered = topItems.reduce((s,[,c])=>s+c,0)/train.length * 100;
-  $('coldTbl').innerHTML =
-    `<tr><td>Cold users (&lt;5)</td><td>${fmt(coldUsers)}</td></tr>
-     <tr><td>Cold items (&lt;5)</td><td>${fmt(coldItems)}</td></tr>
-     <tr><td>Top 1% items (by interactions)</td><td>${fmt(top1pctCut)}</td></tr>
-     <tr><td>Pareto: % train covered by top 1%</td><td>${covered.toFixed(1)}%</td></tr>`;
-}
-
-///////////////////////
-// Tensor helpers
-///////////////////////
-function buildBatchTensors(batch){
-  const u = tf.tensor1d(batch.map(x=>userIndex.get(x.u)), 'int32');
-  const i = tf.tensor1d(batch.map(x=>itemIndex.get(x.i)), 'int32');
-  const r = tf.tensor1d(batch.map(x=>x.r??1), 'float32');
-  return {u,i,r};
-}
-
-// Multi-hot tag vector (length = topTagK) for a given item index
-function itemTagVector(iIdx){
-  const itemId = idx2item[iIdx];
-  const obj = items.get(itemId);
-  const vec = new Array(topTagK).fill(0);
-  if (obj && obj.tags){
-    for (const t of obj.tags){
-      let k = tag2idx.get(t);
-      if (k===undefined){ // hash fallback
-        k = Math.abs(hashStr(t)) % topTagK;
+    if (rawTags && rawTags !== '[]') {
+      try {
+        const safe = rawTags
+          .replace(/^u?"/, '"') // some dumps add unicode prefix
+          .replace(/'/g, '"')
+          .replace(/,\s*]/g, ']');
+        const arr = JSON.parse(safe);
+        if (Array.isArray(arr)) tags = arr.map(t => String(t).toLowerCase());
+      } catch {
+        // fallback: naive split
+        tags = rawTags.replace(/[\[\]']/g, '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
       }
-      vec[k] = 1;
+    }
+    map.set(id, { id, name, tags, minutes, n_steps, n_ingredients: n_ing });
+  }
+  return map;
+}
+
+async function loadData() {
+  try {
+    setStatus('loading…');
+
+    // 1) interactions (train)
+    const interCandidates = [
+      'data/interactions_train.csv',
+      'data/interactions.csv',
+      'data/RAW_interactions.csv'
+    ];
+    const { path: interPath, text: interText } = await loadFirstAvailable(interCandidates);
+    interactions = parseInteractionsCSV(interText);
+
+    // 2) recipes metadata
+    const recipeCandidates = [
+      'data/RAW_recipes.csv',
+      'data/recipes.csv'
+    ];
+    const { path: recipePath, text: recipText } = await loadFirstAvailable(recipeCandidates);
+    items = parseRecipesCSV(recipText);
+
+    // users/items sets
+    users = new Set(interactions.map(x => x.userId));
+    const presentItemIds = new Set(interactions.map(x => x.itemId));
+    // ensure we have item objects for items present in interactions (even if missing in recipes.csv)
+    for (const it of presentItemIds) {
+      if (!items.has(it)) items.set(it, { id: it, name: `Recipe ${it}`, tags: [] });
+    }
+
+    // indexers
+    idxToUserId = Array.from(users);
+    userIdToIdx = new Map(idxToUserId.map((u, i) => [u, i]));
+    idxToItemId = Array.from(items.keys());
+    itemIdToIdx = new Map(idxToItemId.map((it, i) => [it, i]));
+
+    // EDA metrics
+    computeEDA();
+
+    setStatus(`loaded: users=${users.size}, items=${items.size} (file: ${recipePath}), interactions=${interactions.length} (file: ${interPath})`);
+    drawEDA();
+  } catch (err) {
+    console.error(err);
+    setStatus('fetch failed. Ensure /data/*.csv exist (case-sensitive). (Tip: path must be data/… without a leading slash on GitHub Pages)');
+  }
+}
+
+/* ------------------------------- EDA -------------------------------- */
+function histogram(arr, buckets) {
+  const counts = new Array(buckets.length).fill(0);
+  for (const v of arr) {
+    for (let b = 0; b < buckets.length; b++) {
+      const [lo, hi] = buckets[b];
+      if (v >= lo && v <= hi) { counts[b]++; break; }
     }
   }
-  return vec;
+  return counts;
 }
 
-function hashStr(s){
-  let h=0; for (let i=0;i<s.length;i++){ h=(h*31 + s.charCodeAt(i))|0; } return h>>>0;
+function computeEDA() {
+  // ratings hist (1..5 common in Food.com)
+  const r = interactions.map(x => Number(x.rating)).filter(Number.isFinite);
+  const br = [[1,1],[2,2],[3,3],[4,4],[5,5]];
+  ratingsHist = { buckets: ['1','2','3','4','5'], counts: histogram(r, br) };
+
+  // user activity = ratings per user
+  const perUser = new Map();
+  for (const it of interactions) perUser.set(it.userId, (perUser.get(it.userId) || 0) + 1);
+  const ua = Array.from(perUser.values());
+  const bU = [[1,1],[2,2],[3,3],[4,5],[6,10],[11,20],[21,50],[51,100],[101,200],[201,500],[501, 1e9]];
+  const uLabels = ['1','2','3','4–5','6–10','11–20','21–50','51–100','101–200','201–500','>500'];
+  userActivityHist = { buckets: uLabels, counts: histogram(ua, bU) };
+
+  // item popularity = ratings per item
+  const perItem = new Map();
+  for (const it of interactions) perItem.set(it.itemId, (perItem.get(it.itemId) || 0) + 1);
+  const ip = Array.from(perItem.values());
+  const bI = [[1,1],[2,2],[3,3],[4,5],[6,10],[11,20],[21,50],[51,100],[101,200],[201,500],[501, 2000]];
+  const iLabels = ['1','2','3','4–5','6–10','11–20','21–50','51–100','101–200','201–500','>500'];
+  itemPopularityHist = { buckets: iLabels, counts: histogram(ip, bI) };
+
+  // tags frequency (top 20)
+  const tagCount = new Map();
+  for (const it of items.values()) {
+    if (!it.tags) continue;
+    for (const t of it.tags) tagCount.set(t, (tagCount.get(t) || 0) + 1);
+  }
+  topTagCounts = Array.from(tagCount.entries())
+    .sort((a,b)=>b[1]-a[1])
+    .slice(0, 20);
 }
 
-///////////////////////
-// Training
-///////////////////////
-function makeShuffled(arr, maxN){
-  const A = maxN ? arr.slice(0, maxN) : arr.slice();
-  for (let i=A.length-1;i>0;i--){ const j = (Math.random()* (i+1))|0; [A[i],A[j]]=[A[j],A[i]]; }
-  return A;
-}
+/* ------------------------------ drawing ------------------------------ */
+function drawBars(canvas, labels, counts) {
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width = canvas.clientWidth || 600;
+  const h = canvas.height = canvas.clientHeight || 220;
+  ctx.clearRect(0,0,w,h);
 
-async function trainBaseline(){
-  if (!users.size) return;
-  // Dispose old model if any
-  if (baseline) { baseline.dispose(); baseline=null; }
-  lastItemEmb?.dispose?.(); lastItemEmb=null;
-  baseLossTrace = []; drawLine('baseLoss', baseLossTrace);
+  const max = Math.max(1, ...counts);
+  const pad = 24;
+  const barW = (w - pad*2) / counts.length;
+  ctx.font = '12px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
 
-  const emb = parseInt($('bEmb').value,10);
-  const epochs = parseInt($('bEp').value,10);
-  const batch = parseInt($('bBa').value,10);
-  const lr = parseFloat($('bLr').value);
-  const maxI = parseInt($('bMax').value,10);
-
-  $('baseLine').textContent = 'Training baseline…';
-  const data = makeShuffled(train, maxI);
-
-  baseline = new TwoTowerModel(idx2user.length, idx2item.length, emb, {learningRate: lr});
-  await baseline.compile(); // sets optimizer
-
-  let step=0;
-  for (let ep=0; ep<epochs; ep++){
-    for (let b=0; b<data.length; b+=batch){
-      const slice = data.slice(b, b+batch);
-      const {u,i} = buildBatchTensors(slice);
-      const loss = await baseline.trainStep(u,i); // in-batch softmax
-      u.dispose(); i.dispose();
-      baseLossTrace.push({x: ++step, y: loss});
-      if (step%5===0) drawLine('baseLoss', baseLossTrace);
-      await tf.nextFrame();
+  for (let i=0;i<counts.length;i++) {
+    const x = pad + i*barW + 2;
+    const val = counts[i];
+    const bh = Math.round((h - 48) * (val / max));
+    const y = h - 24 - bh;
+    ctx.fillStyle = '#4da3ff';
+    ctx.fillRect(x, y, barW-4, bh);
+    ctx.fillStyle = '#9aa4b2';
+    // label (rotate if too many)
+    if (labels.length <= 14) {
+      ctx.fillText(labels[i], x + (barW-4)/2, h - 20);
+    } else {
+      ctx.save();
+      ctx.translate(x + (barW-4)/2, h - 4);
+      ctx.rotate(-Math.PI/3);
+      ctx.fillText(labels[i], 0, 0);
+      ctx.restore();
     }
   }
-  $('baseLine').innerHTML = `Baseline done. Final loss <b>${baseLossTrace.at(-1).y.toFixed(4)}</b>`;
-  lastItemEmb = baseline.itemEmbedding.read();
-  drawProjection(lastItemEmb);
-  computeAndShowMetrics().catch(console.error);
 }
 
-async function trainDeepModel(){
-  if (!users.size) return;
-  if (deep) { deep.dispose(); deep=null; }
-  lastItemEmbDeep?.dispose?.(); lastItemEmbDeep=null;
-  deepLossTrace = []; drawLine('deepLoss', deepLossTrace);
+function drawEDA() {
+  drawBars(cvRatings, ratingsHist.buckets, ratingsHist.counts);
+  drawBars(cvUserA, userActivityHist.buckets, userActivityHist.counts);
+  drawBars(cvItemP, itemPopularityHist.buckets, itemPopularityHist.counts);
+  if (cvTags) {
+    const labels = topTagCounts.map(([k])=>k);
+    const values = topTagCounts.map(([,v])=>v);
+    drawBars(cvTags, labels, values);
+  }
+}
 
-  const emb = parseInt($('dEmb').value,10);
-  const epochs = parseInt($('dEp').value,10);
-  const batch = parseInt($('dBa').value,10);
-  const lr = parseFloat($('dLr').value);
-  const K = parseInt($('dK').value,10);
-  buildTagVocab(K); // refresh vocab if UI changed
+/* --------------------------- tensors & model ------------------------- */
+function makeTrainingTensors(maxInteractions = 80000) {
+  // cap for memory in browser
+  const N = Math.min(interactions.length, maxInteractions);
+  const U = idxToUserId.length;
+  const I = idxToItemId.length;
 
-  $('deepLine').textContent = 'Training deep…';
-  const data = makeShuffled(train, parseInt($('bMax').value,10));
+  const uIdx = new Int32Array(N);
+  const iIdx = new Int32Array(N);
+  const y    = new Float32Array(N);
 
-  // Build item tag matrix lazily
-  const itemTagMat = tf.tensor2d(
-    idx2item.map((_,iIdx)=> itemTagVector(iIdx) ),
-    [idx2item.length, topTagK],
-    'float32'
+  for (let k=0;k<N;k++) {
+    const r = interactions[k];
+    uIdx[k] = userIdToIdx.get(r.userId) ?? 0;
+    iIdx[k] = itemIdToIdx.get(r.itemId) ?? 0;
+    y[k] = Number(r.rating) || 1;
+  }
+
+  const t = {
+    users: tf.tensor2d(uIdx, [N,1], 'int32'),
+    items: tf.tensor2d(iIdx, [N,1], 'int32'),
+    ratings: tf.tensor2d(y, [N,1], 'float32'),
+    U, I, N
+  };
+  return t;
+}
+
+function disposeAllModels() {
+  try { baseline?.dispose?.(); } catch {}
+  try { deepModel?.dispose?.(); } catch {}
+  try { tf.disposeVariables(); } catch {}
+}
+
+/* ------------------------------- train ------------------------------- */
+async function trainBaseline() {
+  if (!interactions.length) return setStatus('load data first');
+  disposeAllModels();
+
+  const embDim = Number(inpEmbB?.value || 32);
+  const epochs = Number(inpEpochB?.value || 5);
+  const batch  = Number(inpBatchB?.value || 256);
+  const lr     = Number(inpLrB?.value || 1e-3);
+  const maxInt = Number(inpMaxInt?.value || 80000);
+
+  setStatus(`baseline: preparing tensors…`);
+  tensors?.users?.dispose(); tensors?.items?.dispose(); tensors?.ratings?.dispose();
+  tensors = makeTrainingTensors(maxInt);
+
+  baseline = new TwoTowerModel(tensors.U, tensors.I, embDim);
+  baseline.compile(lr);
+
+  const ctx = cvBaseLoss?.getContext('2d');
+  if (ctx) { ctx.clearRect(0,0,cvBaseLoss.width, cvBaseLoss.height); }
+
+  setStatus(`baseline: training…`);
+  await baseline.fit(
+    [tensors.users, tensors.items],
+    tensors.ratings,
+    {
+      epochs, batchSize: batch,
+      onBatchEnd: (step, loss) => {
+        drawLoss(cvBaseLoss, step, loss);
+        if (step % 30 === 0) setStatus(`baseline: step ${step}, loss ${loss.toFixed(4)}`);
+      }
+    }
   );
 
-  deep = new DeepTwoTowerModel(idx2user.length, idx2item.length, emb, topTagK, {learningRate: lr});
-  await deep.compile(itemTagMat); // caches itemTagMat inside model
+  setStatus(`baseline: training done`);
+  // optional: projection (after baseline)
+  drawProjection(baseline.getItemEmbeddings());
+}
 
-  let step=0;
-  for (let ep=0; ep<epochs; ep++){
-    for (let b=0; b<data.length; b+=batch){
-      const slice = data.slice(b, b+batch);
-      const {u,i} = buildBatchTensors(slice);
-      const loss = await deep.trainStep(u,i); // uses tag MLP on items
-      u.dispose(); i.dispose();
-      deepLossTrace.push({x: ++step, y: loss});
-      if (step%5===0) drawLine('deepLoss', deepLossTrace);
-      await tf.nextFrame();
+async function trainDeep() {
+  if (!interactions.length) return setStatus('load data first');
+  disposeAllModels();
+
+  const embDim = Number(inpEmbD?.value || 32);
+  const epochs = Number(inpEpochD?.value || 5);
+  const batch  = Number(inpBatchD?.value || 256);
+  const lr     = Number(inpLrD?.value || 1e-3);
+  const maxInt = Number(inpMaxInt?.value || 80000);
+  const tagFeaturesMax = Math.max(0, Number(inpTagFe?.value || 200));
+
+  setStatus(`deep: building features…`);
+  // build tag bag-of-words (top K tags)
+  const tagCounts = new Map();
+  for (const it of items.values()) for (const t of (it.tags || [])) tagCounts.set(t, (tagCounts.get(t)||0)+1);
+  const topTags = Array.from(tagCounts.entries()).sort((a,b)=>b[1]-a[1]).slice(0, tagFeaturesMax).map(([t])=>t);
+  const tagIndex = new Map(topTags.map((t,idx)=>[t,idx]));
+
+  const I = idxToItemId.length;
+  const tagFeat = tf.buffer([I, topTags.length], 'float32');
+  for (let i=0;i<I;i++) {
+    const itemId = idxToItemId[i];
+    const meta = items.get(itemId);
+    if (!meta?.tags) continue;
+    for (const t of meta.tags) {
+      const j = tagIndex.get(t);
+      if (j != null) tagFeat.set(1, i, j);
     }
   }
-  $('deepLine').innerHTML = `Deep done. Final loss <b>${deepLossTrace.at(-1).y.toFixed(4)}</b>`;
-  lastItemEmbDeep = deep.getFrozenItemEmb(); // read-through MLP
-  drawProjection(lastItemEmbDeep);
-  itemTagMat.dispose();
-  computeAndShowMetrics().catch(console.error);
-}
+  const itemSideInfo = tagFeat.toTensor(); // [I, T]
 
-///////////////////////
-// Projection (PCA/SVD-ish)
-///////////////////////
-function drawProjection(itemEmb){
-  if (!itemEmb) return;
-  // Cheap 2D using top-2 right singular vectors via power iteration on covariance
-  const X = itemEmb; // [N,D]
-  const XT = X.transpose();                  // [D,N]
-  const C = XT.matMul(X);                    // [D,D]
-  const v0 = tf.randomNormal([C.shape[0],1]);
-  const v1 = powerIter(C, v0, 20);           // first PC
-  const deflate = C.sub( v1.matMul(v1.transpose()).mul(C.matMul(v1).transpose().matMul(v1)) );
-  const w0 = tf.randomNormal([C.shape[0],1]);
-  const v2 = powerIter(deflate, w0, 20);     // second PC
-  const P = tf.concat([v1,v2],1);            // [D,2]
-  const Y = X.matMul(P);                     // [N,2]
+  setStatus(`deep: preparing tensors…`);
+  tensors?.users?.dispose(); tensors?.items?.dispose(); tensors?.ratings?.dispose();
+  tensors = makeTrainingTensors(maxInt);
 
-  const pts = Array.from(Y.dataSync());
-  const coords = [];
-  for (let i=0;i<pts.length;i+=2) coords.push({x:pts[i], y:pts[i+1]});
+  deepModel = new TwoTowerDeepModel(tensors.U, tensors.I, embDim, itemSideInfo.shape[1]);
+  deepModel.compile(lr);
 
-  // normalize to [0,1]
-  const minx = Math.min(...coords.map(p=>p.x)), maxx = Math.max(...coords.map(p=>p.x));
-  const miny = Math.min(...coords.map(p=>p.y)), maxy = Math.max(...coords.map(p=>p.y));
-  const norm = coords.map(p=>({x:(p.x-minx)/(maxx-minx+1e-6), y:(p.y-miny)/(maxy-miny+1e-6)}));
+  const ctx = cvDeepLoss?.getContext('2d');
+  if (ctx) { ctx.clearRect(0,0,cvDeepLoss.width, cvDeepLoss.height); }
 
-  const ctx = $('proj').getContext('2d'); clearCanvas(ctx);
-  const W = ctx.canvas.clientWidth, H = ctx.canvas.clientHeight, pad=10;
-  ctx.fillStyle = "#cbd5e1";
-  norm.slice(0,1000).forEach((p,idx)=>{
-    const x = pad + p.x*(W-pad*2);
-    const y = pad + (1-p.y)*(H-pad*2);
-    ctx.fillRect(x,y,2,2);
-  });
-
-  // cleanup
-  v0.dispose(); v1.dispose(); w0.dispose(); v2.dispose(); P.dispose(); XT.dispose(); C.dispose(); deflate.dispose(); Y.dispose();
-}
-
-function powerIter(M, v, iters=10){
-  let x = v;
-  for (let t=0;t<iters;t++){
-    const y = M.matMul(x);
-    const n = y.norm(); x = y.div(n);
-  }
-  return x;
-}
-
-///////////////////////
-// Demo & ranking
-///////////////////////
-function pickUserForDemo(minRatings){
-  const counts = new Map();
-  for (const r of train) counts.set(r.u,(counts.get(r.u)||0)+1);
-  const candidates = Array.from(counts.entries()).filter(([,c])=>c>=minRatings).map(([u])=>u);
-  if (!candidates.length){
-    // auto relax to highest available
-    const maxC = Math.max(0, ...counts.values());
-    const fallback = Array.from(counts.entries()).filter(([,c])=>c===maxC).map(([u])=>u);
-    return {user: fallback[(Math.random()*fallback.length)|0], usedMin:maxC};
-  }
-  return {user: candidates[(Math.random()*candidates.length)|0], usedMin:minRatings};
-}
-
-async function demoOnce(){
-  if (!baseline && !deep) { $('demoLine').textContent = 'Train a model first (baseline or deep).'; return; }
-  const reqMin = parseInt($('minRatings').value,10);
-  const picked = pickUserForDemo(reqMin);
-  const u = picked.user;
-  $('demoLine').textContent = `Testing with user ${u} (threshold used: ${picked.usedMin}).`;
-
-  // history top-10 (by rating then recency)
-  const hist = (user2items.get(u)||[]).slice().sort((a,b)=> (b.r-a.r) || (b.ts-a.ts)).slice(0,10);
-  $('histTbl').innerHTML = hist.map((row,idx)=>(
-    `<tr><td>${idx+1}</td><td>${escapeHtml(items.get(row.i)?.title||row.i)}</td><td>${row.r??''}</td></tr>`
-  )).join('');
-
-  // candidate pool = all items minus seen
-  const seen = new Set((user2items.get(u)||[]).map(x=>x.i));
-  const candIdx = idx2item.map((iid,ii)=> ({iid,ii})).filter(x=>!seen.has(x.iid)).map(x=>x.ii);
-
-  // scores
-  const uIdx = tf.tensor1d([userIndex.get(u)], 'int32');
-  let baseScores=[], deepScores=[];
-  if (baseline){
-    const s = await baseline.scoreUserAgainstAll(uIdx); // [numItems]
-    baseScores = Array.from(s.dataSync());
-    s.dispose();
-  }
-  if (deep){
-    const s = await deep.scoreUserAgainstAll(uIdx); // [numItems]
-    deepScores = Array.from(s.dataSync());
-    s.dispose();
-  }
-  uIdx.dispose();
-
-  // optional graph re-rank
-  const useGraph = $('useGraph').checked;
-  if (useGraph && candIdx.length){
-    const pr = personalizedPageRankForUser(u, user2items, item2users, {alpha:0.15, iters:20});
-    // bump scores: s' = s + λ * pr(item)
-    const lambda = 0.15;
-    if (baseline && baseScores.length){
-      for (const ii of candIdx){ baseScores[ii] += lambda*(pr.get(idx2item[ii])||0); }
+  setStatus(`deep: training…`);
+  await deepModel.fit(
+    [tensors.users, tensors.items],
+    tensors.ratings,
+    {
+      epochs, batchSize: batch,
+      itemSideInfo,
+      onBatchEnd: (step, loss) => {
+        drawLoss(cvDeepLoss, step, loss);
+        if (step % 30 === 0) setStatus(`deep: step ${step}, loss ${loss.toFixed(4)}`);
+      }
     }
-    if (deep && deepScores.length){
-      for (const ii of candIdx){ deepScores[ii] += lambda*(pr.get(idx2item[ii])||0); }
+  );
+
+  setStatus(`deep: training done`);
+  // optional: projection (after deep)
+  drawProjection(deepModel.getItemEmbeddings());
+  itemSideInfo.dispose();
+}
+
+/* -------------------------- loss mini-plot --------------------------- */
+function drawLoss(canvas, step, loss) {
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width = canvas.clientWidth || 600;
+  const h = canvas.height = canvas.clientHeight || 160;
+  if (!canvas.__points) canvas.__points = [];
+  canvas.__points.push([step, loss]);
+  const pts = canvas.__points;
+  const maxX = Math.max(...pts.map(p=>p[0]), 1);
+  const minY = Math.min(...pts.map(p=>p[1]));
+  const maxY = Math.max(...pts.map(p=>p[1]));
+
+  ctx.clearRect(0,0,w,h);
+  ctx.strokeStyle = '#5ecfff';
+  ctx.beginPath();
+  for (let i=0;i<pts.length;i++) {
+    const [x,y] = pts[i];
+    const px = 8 + (w-16) * (x / maxX);
+    const py = 8 + (h-16) * ((maxY - y) / (maxY - minY + 1e-6));
+    if (i===0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+}
+
+/* ------------------------------ demo ------------------------------- */
+function pickUserForDemo(minRatings = 20) {
+  // if no user satisfies, relax to 10/5/2
+  const steps = [minRatings, 10, 5, 2, 1];
+  const byUser = new Map();
+  for (const it of interactions) {
+    if (!byUser.has(it.userId)) byUser.set(it.userId, []);
+    byUser.get(it.userId).push(it);
+  }
+  for (const k of steps) {
+    const cand = Array.from(byUser.entries()).filter(([,arr])=>arr.length >= k);
+    if (cand.length) {
+      const [userId, arr] = cand[Math.floor(Math.random()*cand.length)];
+      // sort: rating desc, then recency
+      arr.sort((a,b)=> (b.rating - a.rating) || (b.ts - a.ts));
+      return { userId, history: arr.slice(0, 50) };
     }
   }
+  return null;
+}
 
-  // render helper
-  const render = (tblId, scoresArr) => {
-    if (!scoresArr.length){ $(tblId).innerHTML = `<tr><td class="muted" colspan="3">—</td></tr>`; return; }
-    const picked = candIdx.map(ii=>({ii, s:scoresArr[ii]}))
-                          .sort((a,b)=>b.s-a.s).slice(0,10);
-    $(tblId).innerHTML = picked.map((row,idx)=>(
-      `<tr><td>${idx+1}</td><td>${escapeHtml(items.get(idx2item[row.ii])?.title||idx2item[row.ii])}</td><td>${row.s.toFixed(3)}</td></tr>`
-    )).join('');
+function renderDemoTables(hist, baseTop, deepTop) {
+  const render = (tbl, rows, showScore=false) => {
+    if (!tbl) return;
+    const thead = tbl.querySelector('thead');
+    const tbody = tbl.querySelector('tbody');
+    if (thead && !thead.__init) {
+      thead.innerHTML = `
+        <tr><th>#</th><th>Recipe</th>${showScore?'<th>score</th>':''}</tr>
+      `;
+      thead.__init = true;
+    }
+    if (tbody) {
+      tbody.innerHTML = '';
+      rows.forEach((r, idx) => {
+        const tr = document.createElement('tr');
+        const name = items.get(r.itemId)?.name || `Recipe ${r.itemId}`;
+        tr.innerHTML = `<td>${idx+1}</td><td>${name}</td>${showScore?`<td>${r.score.toFixed(4)}</td>`:''}`;
+        tbody.appendChild(tr);
+      });
+    }
   };
 
-  render('baseTbl', baseScores);
-  render('deepTbl', deepScores);
-  $('demoLine').textContent += '  — recommendations generated successfully!';
+  render(tblDemoHistory, hist.map(h => ({ itemId: h.itemId })), false);
+  render(tblDemoBase, baseTop, true);
+  render(tblDemoDeep, deepTop, true);
 }
 
-///////////////////////
-// Metrics (Recall@10 / NDCG@10 with sampled negatives)
-///////////////////////
-async function computeAndShowMetrics(){
-  const body = $('metricsBody');
-  if (!valid.length){ body.textContent = 'No validation split found.'; return; }
+async function runDemo() {
+  if (!interactions.length) return setStatus('load data first');
+  if (!baseline && !deepModel) return setStatus('train at least one model first');
 
-  const sampleNeg = 1000;
-  const K = 10;
-  const usersV = Array.from(new Set(valid.map(x=>x.u)));
-  const uPick = usersV.slice(0, 100); // keep it fast
+  const pick = pickUserForDemo(20);
+  if (!pick) { setStatus('No user with ≥20 ratings in this split. (Relaxed threshold automatically)'); return; }
+  const { userId, history } = pick;
 
-  function topKForModel(model){
-    return tf.tidy(()=>{
-      const ue = model.userEmbedding.read(); // [U,D] or [U,D] variable
-      ue.dispose(); // read() returns a new tensor, not the variable
-    });
+  // scores: dot(u, i)
+  const exclude = new Set(history.map(h => h.itemId));
+  const uid = userIdToIdx.get(userId);
+  const allItemsIdx = idxToItemId.map((_,i)=>i);
+
+  let baseTop = [];
+  if (baseline) {
+    const scores = await baseline.scoreUserAgainstAll(uid);
+    baseTop = allItemsIdx
+      .filter(i => !exclude.has(idxToItemId[i]))
+      .map(i => ({ itemId: idxToItemId[i], score: scores[i] }))
+      .sort((a,b)=>b.score-a.score)
+      .slice(0, 10);
   }
 
-  async function evalModel(model, itemEmbGetter){
-    if (!model) return null;
-    let hits=0, dcg=0, ideal=0;
-    for (const u of uPick){
-      const seen = new Set((user2items.get(u)||[]).map(x=>x.i));
-      const testPos = valid.filter(x=>x.u===u).map(x=>x.i);
-      if (!testPos.length) continue;
+  let deepTop = [];
+  if (deepModel) {
+    const scores = await deepModel.scoreUserAgainstAll(uid);
+    deepTop = allItemsIdx
+      .filter(i => !exclude.has(idxToItemId[i]))
+      .map(i => ({ itemId: idxToItemId[i], score: scores[i] }))
+      .sort((a,b)=>b.score-a.score)
+      .slice(0, 10);
+  }
 
-      // build candidate set: pos + sampled negatives
-      const neg = [];
-      while (neg.length<sampleNeg){
-        const ii = idx2item[(Math.random()*idx2item.length)|0];
-        if (!seen.has(ii) && !testPos.includes(ii)) neg.push(ii);
+  renderDemoTables(history.slice(0,10), baseTop, deepTop);
+  setStatus('recommendations generated successfully!');
+}
+
+/* ------------------------ simple 2D projection ----------------------- */
+function drawProjection(itemEmb) {
+  if (!projCanvas || !itemEmb) return;
+  const ctx = projCanvas.getContext('2d');
+  const w = projCanvas.width = projCanvas.clientWidth || 780;
+  const h = projCanvas.height = projCanvas.clientHeight || 260;
+  ctx.clearRect(0,0,w,h);
+
+  // quick PCA (SVD of cov) for small sample
+  const E = itemEmb.arraySync(); // [I, d]
+  const I = Math.min(1000, E.length);
+  const d = E[0]?.length || 0;
+  if (!I || !d) return;
+  const X = E.slice(0, I);
+
+  // center
+  const mean = new Array(d).fill(0);
+  for (const v of X) for (let j=0;j<d;j++) mean[j]+=v[j];
+  for (let j=0;j<d;j++) mean[j]/=I;
+  for (const v of X) for (let j=0;j<d;j++) v[j]-=mean[j];
+
+  // power method to get first 2 components
+  function powerVec(A, iters=40) {
+    let v = new Array(A[0].length).fill(0).map(()=>Math.random()-0.5);
+    for (let t=0;t<iters;t++) {
+      const Av = new Array(v.length).fill(0);
+      for (const row of A) {
+        const dot = row.reduce((s,xi,idx)=>s+xi*v[idx],0);
+        for (let j=0;j<v.length;j++) Av[j]+=row[j]*dot;
       }
-      const candidates = testPos.slice(0, Math.min(testPos.length,5)).concat(neg);
-
-      // score
-      const uIdx = tf.tensor1d([userIndex.get(u)], 'int32');
-      const scores = await model.scoreItems(uIdx, candidates.map(i=>itemIndex.get(i)));
-      uIdx.dispose();
-      const arr = Array.from(scores.dataSync());
-      scores.dispose();
-
-      // rank
-      const zipped = candidates.map((iid,ix)=>({iid, s:arr[ix], rel: testPos.includes(iid)?1:0}))
-                               .sort((a,b)=>b.s-a.s).slice(0,K);
-      hits += zipped.some(z=>z.rel>0) ? 1 : 0;
-      dcg += zipped.reduce((s,z,idx)=> s + (z.rel>0 ? 1/Math.log2(idx+2) : 0), 0);
-      ideal += 1; // ideal DCG for 1 relevant in topK is 1/log2(2)=1
+      const norm = Math.sqrt(Av.reduce((s,a)=>s+a*a,0))+1e-9;
+      v = Av.map(a=>a/norm);
     }
-    return { recallAt10: hits/Math.max(1,uPick.length), ndcgAt10: dcg/Math.max(1,ideal) };
+    return v;
   }
+  const pc1 = powerVec(X);
+  // deflate
+  for (const row of X) {
+    const dot = row.reduce((s,xi,idx)=>s+xi*pc1[idx],0);
+    for (let j=0;j<d;j++) row[j]-=dot*pc1[j];
+  }
+  const pc2 = powerVec(X);
 
-  const baseM = await evalModel(baseline);
-  const deepM = await evalModel(deep);
+  const pts = E.slice(0, I).map(v => {
+    const x = v.reduce((s,xi,idx)=>s+xi*pc1[idx],0);
+    const y = v.reduce((s,xi,idx)=>s+xi*pc2[idx],0);
+    return [x,y];
+  });
 
-  body.innerHTML =
-    `<p>Validation users sampled: ${fmt(uPick.length)} (sampled negatives=${sampleNeg})</p>`+
-    `<p>Baseline — Recall@10: <b>${baseM?baseM.recallAt10.toFixed(3):'—'}</b> · nDCG@10: <b>${baseM?baseM.ndcgAt10.toFixed(3):'—'}</b></p>`+
-    `<p>Deep (MLP+tags) — Recall@10: <b class="${deepM && baseM && deepM.recallAt10>=baseM.recallAt10?'ok':'bad'}">${deepM?deepM.recallAt10.toFixed(3):'—'}</b> · nDCG@10: <b>${deepM?deepM.ndcgAt10.toFixed(3):'—'}</b></p>`;
+  // scale to canvas
+  const xs = pts.map(p=>p[0]), ys = pts.map(p=>p[1]);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  ctx.fillStyle = '#8bd1ff';
+  for (const [x,y] of pts) {
+    const px = 8 + (w-16) * ((x - minX) / (maxX - minX + 1e-9));
+    const py = h-8 - (h-16) * ((y - minY) / (maxY - minY + 1e-9));
+    ctx.fillRect(px-1, py-1, 2, 2);
+  }
 }
 
-///////////////////////
-// Utilities & wiring
-///////////////////////
-function escapeHtml(s){ return (s??'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;' }[m])); }
+/* ----------------------------- wiring ------------------------------- */
+if (btnLoad)   btnLoad.addEventListener('click', loadData);
+if (btnTrainB) btnTrainB.addEventListener('click', trainBaseline);
+if (btnTrainD) btnTrainD.addEventListener('click', trainDeep);
+if (btnTest)   btnTest.addEventListener('click', runDemo);
 
-$('loadBtn').addEventListener('click', handleLoad);
-$('trainBase').addEventListener('click', ()=>trainBaseline().catch(console.error));
-$('trainDeep').addEventListener('click', ()=>trainDeepModel().catch(console.error));
-$('btnTest').addEventListener('click', ()=>demoOnce().catch(console.error));
+// Make canvases crisp on HiDPI
+function crispCanvas(c) {
+  if (!c) return;
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  const w = c.clientWidth || c.width, h = c.clientHeight || c.height;
+  c.width = Math.round(w * dpr);
+  c.height = Math.round(h * dpr);
+  c.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+[cvRatings, cvTags, cvUserA, cvItemP, cvBaseLoss, cvDeepLoss, projCanvas].forEach(crispCanvas);
+
+// Optional: auto-load on first tab visit (comment out if undesired)
+// document.addEventListener('DOMContentLoaded', () => setTimeout(()=> btnLoad?.click(), 150));
+
+/* -------------------------------------------------------------------- */
