@@ -1,86 +1,112 @@
 /* graph.js
-   Lightweight Personalized PageRank over a user–item bipartite graph.
-   We run a two‑step random walk (item→user→item) within a local neighborhood.
-   Returns: Map<itemId, score> for re‑ranking.
+   Personalized PageRank on a bipartite user–item graph.
+
+   We seed with the picked user and their interacted items,
+   then run a few power iterations with restart α.
+
+   Return: Map<itemId -> score> (items only)
 */
 
 function personalizedPageRankForUser(userId, user2items, item2users, opts = {}) {
-  const alpha = opts.alpha ?? 0.15; // restart prob
+  const alpha = opts.alpha ?? 0.15;
   const iters = opts.iters ?? 20;
-  const maxUsers = opts.maxUsers ?? 4000;   // keep local neighborhood bounded
-  const maxItems = opts.maxItems ?? 6000;
 
-  // Seed = user's own items
-  const seedItems = new Set((user2items.get(userId) || []).map(x => x.i));
-  if (!seedItems.size) return new Map();
+  // Collect node sets
+  const userIds = new Set([userId]);
+  const itemIds = new Set();
+  const seeds = new Set();
 
-  // Neighborhood: users who touched seedItems, and the items they touched
-  const nbrUsers = new Set();
-  for (const i of seedItems) {
-    const uSet = item2users.get(i);
-    if (!uSet) continue;
-    for (const u of uSet) {
-      if (nbrUsers.size < maxUsers) nbrUsers.add(u);
-    }
+  const hist = user2items.get(userId) || [];
+  for (const { i } of hist) { itemIds.add(i); seeds.add(i); }
+
+  // Neighborhood expansion (1 hop) to avoid empty graph
+  for (const iid of itemIds) {
+    const uSet = item2users.get(iid);
+    if (uSet) for (const u of uSet) userIds.add(u);
   }
-  const candItems = new Set([...seedItems]);
-  for (const u of nbrUsers) {
+  for (const u of userIds) {
     const arr = user2items.get(u) || [];
-    for (const row of arr) {
-      if (candItems.size < maxItems) candItems.add(row.i);
+    for (const { i } of arr) itemIds.add(i);
+  }
+
+  // Indexing
+  const users = Array.from(userIds);
+  const items = Array.from(itemIds);
+  const U = users.length, I = items.length;
+  const uIndex = new Map(users.map((u, k) => [u, k]));
+  const iIndex = new Map(items.map((i, k) => [i, k]));
+
+  // Transition: random walk from user -> items and item -> users (normalized)
+  const outU = new Array(U).fill(0).map(() => []);
+  const outI = new Array(I).fill(0).map(() => []);
+
+  for (let ui = 0; ui < U; ui++) {
+    const uId = users[ui];
+    const arr = user2items.get(uId) || [];
+    const deg = arr.length || 1;
+    for (const { i } of arr) {
+      const ii = iIndex.get(i);
+      if (ii != null) outU[ui].push([ii, 1 / deg]);
+    }
+  }
+  for (let ii = 0; ii < I; ii++) {
+    const itId = items[ii];
+    const set = item2users.get(itId) || new Set();
+    const deg = set.size || 1;
+    for (const u of set) {
+      const ui = uIndex.get(u);
+      if (ui != null) outI[ii].push([ui, 1 / deg]);
     }
   }
 
-  // Degree caches
-  const degItem = new Map();
-  const degUser = new Map();
-  for (const i of candItems) degItem.set(i, (item2users.get(i) || new Set()).size || 1);
-  for (const u of nbrUsers) degUser.set(u, (user2items.get(u) || []).length || 1);
+  // Initial vector: mass on seed items (or the user if no history)
+  let pU = new Float32Array(U).fill(0);
+  let pI = new Float32Array(I).fill(0);
+  if (seeds.size) {
+    const val = 1 / seeds.size;
+    for (const iid of seeds) {
+      const ii = iIndex.get(iid);
+      if (ii != null) pI[ii] = val;
+    }
+  } else {
+    const ui = uIndex.get(userId);
+    if (ui != null) pU[ui] = 1;
+  }
 
-  // Scores
-  let score = new Map();
-  let teleport = new Map();
-  for (const i of candItems) score.set(i, seedItems.has(i) ? 1 / seedItems.size : 0);
-  teleport = new Map(score); // same support
-
-  // Iterate: item→user→item with restart
   for (let t = 0; t < iters; t++) {
-    // Push to users
-    const userScore = new Map();
-    for (const [i, s] of score.entries()) {
-      const users = item2users.get(i) || new Set();
-      const di = degItem.get(i) || 1;
-      for (const u of users) {
-        if (!nbrUsers.has(u)) continue;
-        const val = (userScore.get(u) || 0) + s / di;
-        userScore.set(u, val);
-      }
+    const nextU = new Float32Array(U).fill(0);
+    const nextI = new Float32Array(I).fill(0);
+
+    // user -> item
+    for (let ui = 0; ui < U; ui++) {
+      const mass = (1 - alpha) * pU[ui];
+      if (!mass) continue;
+      for (const [ii, w] of outU[ui]) nextI[ii] += mass * w;
     }
-    // Normalize by each user degree
-    for (const [u, v] of userScore.entries()) {
-      userScore.set(u, v / (degUser.get(u) || 1));
+    // item -> user
+    for (let ii = 0; ii < I; ii++) {
+      const mass = (1 - alpha) * pI[ii];
+      if (!mass) continue;
+      for (const [ui, w] of outI[ii]) nextU[ui] += mass * w;
     }
 
-    // Pull back to items
-    const next = new Map();
-    for (const [u, su] of userScore.entries()) {
-      const arr = user2items.get(u) || [];
-      for (const row of arr) {
-        if (!candItems.has(row.i)) continue;
-        const di = degItem.get(row.i) || 1;
-        next.set(row.i, (next.get(row.i) || 0) + su / di);
+    // restart
+    for (let ui = 0; ui < U; ui++) nextU[ui] += alpha * (ui === uIndex.get(userId) ? 1 : 0);
+    if (seeds.size) {
+      const val = alpha / seeds.size;
+      for (const iid of seeds) {
+        const ii = iIndex.get(iid);
+        if (ii != null) nextI[ii] += val;
       }
     }
 
-    // Restart
-    for (const i of candItems) {
-      const walk = (1 - alpha) * (next.get(i) || 0);
-      const restart = alpha * (teleport.get(i) || 0);
-      next.set(i, walk + restart);
-    }
-    score = next;
+    pU = nextU; pI = nextI;
   }
-  return score;
+
+  // Return only item scores
+  const out = new Map();
+  for (let ii = 0; ii < I; ii++) out.set(items[ii], pI[ii]);
+  return out;
 }
 
 window.personalizedPageRankForUser = personalizedPageRankForUser;
