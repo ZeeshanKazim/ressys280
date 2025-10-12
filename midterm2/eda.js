@@ -1,568 +1,495 @@
-/* eda.js — 2025-grade, static EDA for Food Recommenders
-   Works on GitHub Pages. No servers. Put CSVs in repo root or /data/.
-   Data expected:
-     - RAW_recipes.csv (preferred) or PP_recipes.csv
-       id, name/title, tags (python-list string), minutes, n_ingredients
-     - interactions_train.csv
-       user_id, item_id, rating, date (timestamp or parseable string)
-*/
+/* eda-app.js — static, business-first EDA for food recommender (GitHub Pages ready) */
+/* Loads RAW_recipes.csv or PP_recipes.csv and interactions_train.csv from ./ or ./data/ */
 
-(() => {
-  // ---------- DOM helpers ----------
-  const $ = (id) => document.getElementById(id);
-  const fmt = (n) => (typeof n === "number" ? n.toLocaleString() : n);
-  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const $ = (id)=>document.getElementById(id);
+const fmt = (n)=> typeof n==='number' ? n.toLocaleString() : n;
 
-  // ---------- state ----------
-  let recipes = new Map(); // id -> {title,tags[],minutes,n_ingredients}
-  let interactions = [];   // {u,i,r,ts,date}
-  let user2items = new Map(); // u -> array {i,r,ts}
-  let item2users = new Map(); // i -> Set(u)
-  let tagFreq = new Map();
-  let minutesAvail = false, nIngAvail = false, ratingsAvail = false, datesAvail = false;
+// ---------------- state ----------------
+let items = new Map();           // id -> {name, minutes, n_ingredients, tags[]}
+let users = new Set();
+let interactions = [];           // [{u,i,r,ts}]
+let user2rows = new Map();       // u -> rows
+let item2rows = new Map();       // i -> rows
+let tag2count = new Map();
 
-  // ---------- file loading ----------
-  async function fetchTextFirst(paths) {
-    for (const p of paths) {
-      try {
-        const res = await fetch(p, { cache: "no-store" });
-        if (res.ok) {
-          const text = await res.text();
-          return { path: p, text };
-        }
-      } catch (_) {}
-    }
-    return null;
+let loadedFiles = {recipes:'—', inter:'—'};
+let topK = 200, edgeMin = 40, nodeCap = 80;
+
+// ---------------- tabs ----------------
+document.querySelectorAll('.tab').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.tabpane').forEach(p=>p.classList.add('hidden'));
+    btn.classList.add('active');
+    $(btn.dataset.tab).classList.remove('hidden');
+  });
+});
+
+// ---------------- IO helpers ----------------
+async function fetchFirst(paths){
+  for (const p of paths){
+    try{
+      const r = await fetch(p, {cache:'no-store'});
+      if (r.ok) return {path:p, text: await r.text()};
+    }catch{}
   }
+  return null;
+}
+function splitCSVLine(line){
+  return line.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/g);
+}
 
-  function parseCSV(text) {
-    return new Promise((resolve) => {
-      Papa.parse(text, {
-        header: true,
-        dynamicTyping: true,
-        skipEmptyLines: true,
-        fastMode: false,
-        complete: (out) => resolve(out.data),
-      });
-    });
+// recipes: RAW_recipes.csv or PP_recipes.csv
+function parseRecipes(text){
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  const head = splitCSVLine(lines.shift()).map(s=>s.toLowerCase());
+  const idxId  = head.findIndex(h=>/^id$|(^|_)id$/.test(h));
+  const idxName = head.findIndex(h=>/(name|title)/.test(h));
+  const idxTags = head.findIndex(h=>/tags/.test(h));
+  const idxMin  = head.findIndex(h=>/minute/.test(h));
+  const idxIng  = head.findIndex(h=>/ingredient/.test(h));
+  for (const ln of lines){
+    const cols = splitCSVLine(ln);
+    const id = parseInt(cols[idxId],10); if (!Number.isInteger(id)) continue;
+    const name = (cols[idxName]||`Recipe ${id}`).replace(/^"|"$/g,'');
+    const minutes = idxMin>=0 ? parseInt(cols[idxMin]||'0',10)||0 : 0;
+    const n_ing = idxIng>=0 ? parseInt(cols[idxIng]||'0',10)||0 : 0;
+    let tags=[];
+    if (idxTags>=0 && cols[idxTags]){
+      let raw = cols[idxTags].trim();
+      raw = raw.replace(/^\s*\[|\]\s*$/g,''); // strip [ ... ]
+      tags = raw.split(/['"]\s*,\s*['"]|,\s*/g)
+                .map(s=>s.replace(/^\s*['"]?|['"]?\s*$/g,'').trim())
+                .filter(Boolean);
+    }
+    items.set(id,{name, minutes, n_ingredients:n_ing, tags});
+    for (const t of tags){ tag2count.set(t,(tag2count.get(t)||0)+1); }
   }
+}
 
-  function detectCol(cols, wanted) {
-    // wanted: array of regexps to try in order
-    const lower = cols.map((c) => c.toLowerCase());
-    for (const rx of wanted) {
-      const ix = lower.findIndex((c) => rx.test(c));
-      if (ix >= 0) return cols[ix];
-    }
-    return null;
+// interactions: interactions_train.csv
+function parseInteractions(text){
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  if (!lines.length) return;
+  const head = splitCSVLine(lines.shift()).map(s=>s.toLowerCase());
+  const uIdx = head.findIndex(h=>/user/.test(h));
+  const iIdx = head.findIndex(h=>/(item|recipe)_?id/.test(h));
+  const rIdx = head.findIndex(h=>/rating/.test(h));
+  const tIdx = head.findIndex(h=>/(time|date|timestamp)/.test(h));
+  for (const ln of lines){
+    const cols = splitCSVLine(ln);
+    const u = parseInt(cols[uIdx],10), i = parseInt(cols[iIdx],10);
+    if (!Number.isInteger(u) || !Number.isInteger(i)) continue;
+    const r = rIdx>=0 && cols[rIdx]!=='' ? parseFloat(cols[rIdx]) : 0;
+    const ts = tIdx>=0 ? (Date.parse(cols[tIdx])||0) : 0;
+    const row = {u,i,r,ts};
+    interactions.push(row);
+    users.add(u);
+    if (!user2rows.has(u)) user2rows.set(u,[]);
+    user2rows.get(u).push(row);
+    if (!item2rows.has(i)) item2rows.set(i,[]);
+    item2rows.get(i).push(row);
   }
+}
 
-  function safeListCell(v) {
-    if (v == null) return [];
-    if (Array.isArray(v)) return v;
-    let s = String(v).trim();
-    // remove outer quotes if any
-    if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) s = s.slice(1, -1);
-    // strip brackets
-    if (s.startsWith("[") && s.endsWith("]")) s = s.slice(1, -1);
-    if (!s) return [];
-    return s
-      .split(/['"]\s*,\s*['"]|,\s*/g)
-      .map((x) => x.replace(/^['"]|['"]$/g, "").trim())
-      .filter(Boolean);
+// ---------------- draw utils ----------------
+function prepCanvas(id){
+  const ctx = $(id).getContext('2d');
+  const c = ctx.canvas, d = window.devicePixelRatio||1;
+  const w = c.clientWidth, h = c.clientHeight;
+  c.width = Math.max(1,w*d); c.height = Math.max(1,h*d);
+  ctx.setTransform(d,0,0,d,0,0);
+  ctx.clearRect(0,0,w,h);
+  return {ctx,w,h};
+}
+function drawBars(id, vals, opts={}){
+  const {ctx,w,h} = prepCanvas(id);
+  const pad=28, base=h-pad, bw=(w-pad*2)/Math.max(1,vals.length)-6;
+  const maxV = opts.max ?? Math.max(1,...vals);
+  ctx.strokeStyle="#243244"; ctx.beginPath(); ctx.moveTo(pad,base+0.5); ctx.lineTo(w-pad,base+0.5); ctx.stroke();
+  ctx.fillStyle="#e5e7eb";
+  vals.forEach((v,i)=>{
+    const x = pad + i*(bw+6);
+    const hh = (v/maxV)*(h-pad*2);
+    ctx.fillRect(x, base-hh, bw, hh);
+  });
+}
+function drawLine(id, pts){
+  const {ctx,w,h} = prepCanvas(id);
+  if (!pts.length) return;
+  const pad=24, base=h-pad;
+  const maxX = Math.max(...pts.map(p=>p.x)), maxY = Math.max(1,...pts.map(p=>p.y));
+  const sx = (x)=> pad + (x/maxX)*(w-pad*2);
+  const sy = (y)=> base - (y/maxY)*(h-pad*2);
+  ctx.strokeStyle="#7dd3fc"; ctx.beginPath();
+  ctx.moveTo(sx(pts[0].x), sy(pts[0].y));
+  for (let k=1;k<pts.length;k++) ctx.lineTo(sx(pts[k].x), sy(pts[k].y));
+  ctx.stroke();
+}
+function drawScatter(id, pts){
+  const {ctx,w,h} = prepCanvas(id);
+  if (!pts.length) return;
+  const pad=28;
+  const maxX = Math.max(1,...pts.map(p=>p.x)), maxY = Math.max(1,...pts.map(p=>p.y));
+  const sx = (x)=> pad + (x/maxX)*(w-pad*2);
+  const sy = (y)=> (h-pad) - (y/maxY)*(h-pad*2);
+  ctx.fillStyle="#cbd5e1";
+  for (const p of pts){ ctx.fillRect(sx(p.x)-1, sy(p.y)-1, 2, 2); }
+}
+function drawHeatmap(id, matrix, opts={}){
+  const {ctx,w,h} = prepCanvas(id);
+  const rows = matrix.length, cols = matrix[0]?.length||0;
+  if (!rows || !cols) return;
+  const pad=30; const cw=(w-pad*2)/cols, ch=(h-pad*2)/rows;
+  const maxV = Math.max(1, ...matrix.flat());
+  for (let r=0;r<rows;r++){
+    for (let c=0;c<cols;c++){
+      const v = matrix[r][c];
+      const t = v/maxV; // 0..1
+      // simple viridis-ish
+      const col = `hsl(${200 - 200*t}, 80%, ${20+50*t}%)`;
+      ctx.fillStyle = col;
+      ctx.fillRect(pad+c*cw, pad+r*ch, cw-1, ch-1);
+    }
   }
+}
 
-  function toTs(v) {
-    if (v == null || v === "") return 0;
-    if (typeof v === "number" && isFinite(v)) {
-      // numeric epoch? accept seconds or ms range
-      if (v > 1e12) return Math.floor(v / 1000);
-      if (v > 1e10) return Math.floor(v / 1000);
-      return Math.floor(v);
-    }
-    const t = Date.parse(String(v));
-    return isNaN(t) ? 0 : Math.floor(t / 1000);
+// ---------------- business metrics ----------------
+function median(arr){ const a=arr.slice().sort((x,y)=>x-y); const n=a.length; return n? (n%2? a[(n-1)/2] : 0.5*(a[n/2-1]+a[n/2])) : 0; }
+function avg(arr){ return arr.length? arr.reduce((s,v)=>s+v,0)/arr.length : 0; }
+
+// personas by tag substrings
+const PERSONA_RULES = [
+  {key:'Fast cook',      match:['15-minutes','30-minutes','60-minutes','quick']},
+  {key:'Healthy eater',  match:['low-fat','low-calorie','low-cholesterol','low-sodium','low-carb','healthy']},
+  {key:'Dessert lover',  match:['dessert','cake','cookies','sweet','pudding','pie']},
+  {key:'Breakfast/Brunch', match:['breakfast','brunch']},
+  {key:'Vegetarian/Vegan', match:['vegetarian','vegan']},
+  {key:'Gluten-free',    match:['gluten-free']}
+];
+function personaOf(tags){
+  const tLower = (tags||[]).map(t=>t.toLowerCase());
+  let best=null, bestScore=0;
+  for (const p of PERSONA_RULES){
+    let s=0;
+    for (const k of p.match) s += tLower.some(t=>t.includes(k)) ? 1 : 0;
+    if (s>bestScore){ bestScore=s; best=p.key; }
   }
+  return best || 'General';
+}
 
-  async function loadAll() {
-    $('status').textContent = 'Status: searching files…';
+// ---------------- compute & render ----------------
+function renderBadges(){
+  const hasRatings = interactions.some(x=>x.r && !Number.isNaN(x.r));
+  const hasTime = interactions.some(x=>x.ts>0);
+  const hasMinutes = Array.from(items.values()).some(x=>x.minutes>0);
+  const chips = [
+    `Recipes: ${fmt(items.size)}`,
+    `Users: ${fmt(users.size)}`,
+    `Items: ${fmt(new Set(interactions.map(x=>x.i)).size)}`,
+    `Interactions: ${fmt(interactions.length)}`,
+    `Density: ${(interactions.length/(Math.max(1,users.size)*Math.max(1,items.size))).toExponential(3)}`,
+    `Ratings: ${hasRatings?'yes':'no'}`,
+    `Time: ${hasTime?'yes':'no'}`,
+    `Minutes: ${hasMinutes?'yes':'no'}`
+  ];
+  $('badges').innerHTML = chips.map(c=>`<span class="chip">${c}</span>`).join('');
+}
 
-    const recTry = [
-      './RAW_recipes.csv','RAW_recipes.csv','data/RAW_recipes.csv',
-      './PP_recipes.csv','PP_recipes.csv','data/PP_recipes.csv'
-    ];
-    const intTry = [
-      './interactions_train.csv','interactions_train.csv','data/interactions_train.csv'
-    ];
+function renderCounters(){
+  const coldUsers = Array.from(user2rows.values()).filter(a=>a.length<5).length;
+  const coldItems = Array.from(item2rows.values()).filter(a=>a.length<5).length;
+  const div = $('counters');
+  div.innerHTML = [
+    `Users <b>${fmt(users.size)}</b>`,
+    `Items <b>${fmt(item2rows.size)}</b>`,
+    `Interactions <b>${fmt(interactions.length)}</b>`,
+    `Density <b>${(interactions.length/(Math.max(1,users.size)*Math.max(1,items.size))).toExponential(3)}</b>`,
+    `Cold users &lt;5 <b>${fmt(coldUsers)}</b>`,
+    `Cold items &lt;5 <b>${fmt(coldItems)}</b>`,
+    `Ratings present <b>${interactions.some(x=>x.r && !Number.isNaN(x.r))?'yes':'no'}</b>`
+  ].map(s=>`<span class="chip">${s}</span>`).join('');
+}
 
-    const rec = await fetchTextFirst(recTry);
-    const inte = await fetchTextFirst(intTry);
+function renderKPIs(){
+  const iu = users.size? interactions.length/users.size : 0;
+  const ii = item2rows.size? interactions.length/item2rows.size : 0;
+  const itemCoverage = items.size? (item2rows.size/items.size*100) : 0;
+  const mins = Array.from(items.values()).map(x=>x.minutes||0).filter(x=>x>0);
+  const medMin = median(mins);
+  $('kpibox').innerHTML = [
+    `avg interactions/user <b>${iu.toFixed(2)}</b>`,
+    `avg interactions/item <b>${ii.toFixed(2)}</b>`,
+    `items w/ ≥1 interaction <b>${(itemCoverage).toFixed(1)}%</b>`,
+    `median minutes (all recipes) <b>${medMin?medMin.toFixed(0):'—'}</b>`
+  ].map(s=>`<span class="chip">${s}</span>`).join('');
+}
 
-    if (!rec || !inte) {
-      $('status').textContent = 'Status: missing CSVs. Expect RAW_recipes/PP_recipes + interactions_train.';
-      throw new Error('Missing files');
+function drawOverview(){
+  // interactions over time
+  const grp = {};
+  for (const r of interactions){
+    const d = r.ts ? new Date(r.ts) : null;
+    let key;
+    const g = $('timeGroup').value.trim().toLowerCase();
+    if (d){
+      if (g==='week'){
+        const y=d.getUTCFullYear();
+        const w=Math.ceil((((d - new Date(Date.UTC(y,0,1)))/86400000)+4)/7);
+        key=`${y}-W${w.toString().padStart(2,'0')}`;
+      }else{ // month default
+        key = `${d.getUTCFullYear()}-${(d.getUTCMonth()+1).toString().padStart(2,'0')}`;
+      }
+    }else key='unknown';
+    grp[key]=(grp[key]||0)+1;
+  }
+  const xs = Object.keys(grp).filter(k=>k!=='unknown').sort();
+  const pts = xs.map((k,idx)=>({x:idx+1, y:grp[k]}));
+  drawLine('lineInteractions', pts);
+
+  // ratings histogram (1..5)
+  const hist=[0,0,0,0,0];
+  interactions.forEach(r=>{ const v = Math.round(Math.max(1,Math.min(5, r.r||0))); if (v>=1&&v<=5) hist[v-1]++; });
+  drawBars('histRatings', hist, {max:Math.max(...hist,1)});
+
+  // dow × hour heatmap
+  const mat = Array.from({length:7},()=>Array(24).fill(0));
+  for (const r of interactions){
+    if (!r.ts) continue;
+    const d = new Date(r.ts);
+    const dow = (d.getUTCDay()+6)%7; // Mon=0
+    const hr = d.getUTCHours();
+    mat[dow][hr]++;
+  }
+  drawHeatmap('dowHour', mat);
+}
+
+function drawUsers(){
+  // activity hist
+  const counts = Array.from(user2rows.values()).map(a=>a.length);
+  const buckets = [0,0,0,0,0,0,0,0];
+  counts.forEach(v=>{
+    const idx = v===1?0 : v<=2?1 : v<=3?2 : v<=5?3 : v<=10?4 : v<=20?5 : v<=50?6 : 7;
+    buckets[idx]++;
+  });
+  drawBars('histUser', buckets);
+
+  // avg rating vs activity
+  const map = new Map();
+  for (const [u,rows] of user2rows){
+    const cnt = rows.length;
+    const r = rows.filter(x=>x.r>0).map(x=>x.r);
+    const avgR = r.length? avg(r) : 0;
+    map.set(u, {x:cnt, y:avgR});
+  }
+  drawScatter('scatterUser', Array.from(map.values()));
+}
+
+function drawItems(){
+  // popularity hist
+  const counts = Array.from(item2rows.values()).map(a=>a.length);
+  const buckets = [0,0,0,0,0,0,0,0,0];
+  counts.forEach(v=>{
+    const idx = v===1?0 : v<=2?1 : v<=3?2 : v<=5?3 : v<=10?4 : v<=20?5 : v<=100?6 : v<=500?7 : 8;
+    buckets[idx]++;
+  });
+  drawBars('histItem', buckets);
+
+  // item avg rating vs popularity
+  const pts = [];
+  for (const [i,rows] of item2rows){
+    const cnt = rows.length;
+    const r = rows.filter(x=>x.r>0).map(x=>x.r);
+    const avgR = r.length? avg(r) : 0;
+    pts.push({x:cnt, y:avgR});
+  }
+  drawScatter('scatterItem', pts);
+
+  // minutes
+  drawBars('histMinutes', histogram(Array.from(items.values()).map(x=>x.minutes||0), [0,15,30,45,60,90,120,180,240]));
+
+  // ingredients
+  drawBars('histIngr', histogram(Array.from(items.values()).map(x=>x.n_ingredients||0), [0,3,5,7,9,12,15,20,30]));
+}
+function histogram(values, edges){
+  const b = Array(edges.length).fill(0);
+  for (const v of values){
+    for (let i=0;i<edges.length;i++){
+      if (v<=edges[i]){ b[i]++; break; }
     }
-    $('status').textContent = 'Status: parsing…';
+  }
+  return b;
+}
 
-    const recRows = await parseCSV(rec.text);
-    const intRows = await parseCSV(inte.text);
+function drawTags(){
+  // top-K
+  const top = Array.from(tag2count.entries()).sort((a,b)=>b[1]-a[1]).slice(0,30);
+  drawBars('barTags', top.map(([,c])=>c), {max:Math.max(1,...top.map(([,c])=>c))});
 
-    // detect recipe columns
-    const recCols = recRows.length ? Object.keys(recRows[0]) : [];
-    const idCol = detectCol(recCols, [/^id$|(^|_)id$/i, /(recipe|item)_?id/i]) || recCols[0];
-    const nameCol = detectCol(recCols, [/name|title/i]) || idCol;
-    const tagsCol = detectCol(recCols, [/tags/i]);
-    const minutesCol = detectCol(recCols, [/minute/i]);
-    const ningCol = detectCol(recCols, [/n_ingredients/i, /ingredients?(_count)?/i]);
-
-    recipes.clear();
-    tagFreq.clear();
-    minutesAvail = !!minutesCol;
-    nIngAvail = !!ningCol;
-
-    for (const row of recRows) {
-      const id = parseInt(row[idCol], 10);
-      if (!Number.isInteger(id)) continue;
-      const title = (row[nameCol] ?? `Recipe ${id}`) + '';
-      const tags = tagsCol ? safeListCell(row[tagsCol]).slice(0, 48) : [];
-      const minutes = minutesCol ? Number(row[minutesCol]) : null;
-      const ning = ningCol ? Number(row[ningCol]) : null;
-      recipes.set(id, { title, tags, minutes, n_ingredients: ning });
-      for (const t of tags) tagFreq.set(t, (tagFreq.get(t) || 0) + 1);
+  // co-occurrence network (projected as grid heatmap-like on canvas)
+  // Build lightweight adjacency for topK tags:
+  const topAll = Array.from(tag2count.entries()).sort((a,b)=>b[1]-a[1]).slice(0,topK).map(([t])=>t);
+  const index = new Map(topAll.map((t,i)=>[t,i]));
+  const adj = Array.from({length:topAll.length},()=>Array(topAll.length).fill(0));
+  for (const it of items.values()){
+    const list = (it.tags||[]).filter(t=>index.has(t));
+    for (let a=0;a<list.length;a++){
+      for (let b=a+1;b<list.length;b++){
+        const i=index.get(list[a]), j=index.get(list[b]);
+        adj[i][j]++; adj[j][i]++;
+      }
     }
-
-    // detect interaction columns
-    const intCols = intRows.length ? Object.keys(intRows[0]) : [];
-    const uCol = detectCol(intCols, [/user/i]);
-    const iCol = detectCol(intCols, [/(item|recipe)_?id/i]) || detectCol(intCols, [/id/i]);
-    const rCol = detectCol(intCols, [/rating|stars|score/i]);
-    const dCol = detectCol(intCols, [/time|date/i]);
-
-    if (!uCol || !iCol) throw new Error('user_id or item_id missing in interactions');
-
-    interactions.length = 0;
-    user2items.clear();
-    item2users.clear();
-    ratingsAvail = !!rCol;
-    datesAvail = !!dCol;
-
-    // keep only interactions for recipes we have
-    for (const row of intRows) {
-      const u = Number(row[uCol]);
-      const i = Number(row[iCol]);
-      if (!Number.isFinite(u) || !Number.isFinite(i)) continue;
-      if (!recipes.has(i)) continue;
-      const r = rCol ? Number(row[rCol]) : null;
-      const ts = dCol ? toTs(row[dCol]) : 0;
-      const obj = { u, i, r, ts, date: dCol ? row[dCol] : null };
-      interactions.push(obj);
-
-      if (!user2items.has(u)) user2items.set(u, []);
-      user2items.get(u).push({ i, r, ts });
-      if (!item2users.has(i)) item2users.set(i, new Set());
-      item2users.get(i).add(u);
+  }
+  // keep strongest edges ≥ edgeMin and at most nodeCap nodes
+  const deg = adj.map(row=>row.reduce((s,v)=>s+(v>=edgeMin?1:0),0));
+  const nodes = Array.from(deg.map((d,i)=>({i,d}))).sort((a,b)=>b.d-a.d).slice(0,Math.min(nodeCap,deg.length)).map(n=>n.i);
+  const {ctx,w,h} = prepCanvas('tagGraph');
+  const pad=30, R=Math.min(w,h)/2 - 40, cx=w/2, cy=h/2;
+  ctx.fillStyle="#cbd5e1"; ctx.strokeStyle="#3b556f";
+  // positions on circle
+  const pos = new Map();
+  nodes.forEach((ii,k)=>{ const ang=2*Math.PI*k/nodes.length; pos.set(ii,{x:cx+R*Math.cos(ang), y:cy+R*Math.sin(ang)}); });
+  // edges
+  ctx.globalAlpha = 0.5;
+  for (const i of nodes){
+    for (const j of nodes){
+      if (j<=i) continue;
+      if (adj[i][j] >= edgeMin){
+        const a=pos.get(i), b=pos.get(j);
+        ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+      }
     }
+  }
+  ctx.globalAlpha = 1;
+  // nodes
+  ctx.font = "12px Inter";
+  nodes.forEach(i=>{
+    const p = pos.get(i);
+    ctx.beginPath(); ctx.arc(p.x,p.y,4,0,Math.PI*2); ctx.fill();
+    const tag = topAll[i];
+    ctx.fillText(tag, p.x+6, p.y+2);
+  });
+}
 
-    // summary KPIs
-    const nUsers = user2items.size;
-    const nItems = item2users.size;
-    const nInter = interactions.length;
-    const density = nInter / Math.max(1, nUsers * nItems);
-    const userCounts = Array.from(user2items.values(), arr => arr.length);
-    const itemCounts = Array.from(item2users.values(), s => s.size);
-    const coldUsers = userCounts.filter(c => c < 5).length;
-    const coldItems = itemCounts.filter(c => c < 5).length;
+function drawTime(){
+  // ratings hist duplicate
+  const hist=[0,0,0,0,0]; interactions.forEach(r=>{ const v = Math.round(Math.max(1,Math.min(5, r.r||0))); if (v>=1&&v<=5) hist[v-1]++; });
+  drawBars('histRatings2', hist, {max:Math.max(...hist,1)});
 
-    $('fileLine').innerHTML =
-      `<span class="chip">Recipes: <b>${fmt(recipes.size)}</b></span>
-       <span class="chip">Users: <b>${fmt(nUsers)}</b></span>
-       <span class="chip">Items: <b>${fmt(nItems)}</b></span>
-       <span class="chip">Interactions: <b>${fmt(nInter)}</b></span>
-       <span class="chip">Density: <b>${density.toExponential(2)}</b></span>
-       <span class="chip">Ratings: <b>${ratingsAvail?'yes':'no'}</b></span>
-       <span class="chip">Time: <b>${datesAvail?'yes':'no'}</b></span>
-       <span class="chip">Minutes: <b>${minutesAvail?'yes':'no'}</b></span>
-       <span class="chip">n_ingredients: <b>${nIngAvail?'yes':'no'}</b></span>
-       <span class="chip">Cold users&lt;5: <b>${fmt(coldUsers)}</b></span>
-       <span class="chip">Cold items&lt;5: <b>${fmt(coldItems)}</b></span>`;
+  // interactions by month
+  const grp={}; for (const r of interactions){ if (!r.ts) continue; const d=new Date(r.ts); const k=`${d.getUTCFullYear()}-${(d.getUTCMonth()+1).toString().padStart(2,'0')}`; grp[k]=(grp[k]||0)+1; }
+  const xs = Object.keys(grp).sort(); const pts = xs.map((k,i)=>({x:i+1,y:grp[k]}));
+  drawLine('lineInteractions2', pts);
+}
+
+function drawLongtail(){
+  const counts = Array.from(item2rows.values()).map(a=>a.length).sort((a,b)=>a-b);
+  const total = counts.reduce((s,v)=>s+v,0)||1;
+  let acc=0; const lor = counts.map(v=>{acc+=v; return acc/total;});
+  // Lorenz
+  const pts = lor.map((y,i)=>({x:i+1, y}));
+  drawLine('lorenz', pts);
+  // Gini (approx via Lorenz area)
+  const gini = 1 - 2 * lor.reduce((s,y,i)=> s + y/(counts.length||1), 0) / (counts.length||1);
+  $('giniLine').textContent = `Gini ≈ ${gini.toFixed(3)}`;
+  // Pareto bar: top 1% items
+  const topCut = Math.max(1, Math.floor(0.01*counts.length));
+  const covered = counts.slice(-topCut).reduce((s,v)=>s+v,0)/(total||1)*100;
+  $('paretoLine').textContent = `Top ${topCut} items (~1%) cover ${covered.toFixed(1)}% of interactions.`;
+  drawBars('pareto', [covered, 100-covered], {max:100});
+}
+
+function drawPersonas(){
+  // Build user -> dominant persona via their tagged items
+  const personaCount = new Map(); const personaStats = new Map(); // key -> {users:Set, ratings:[], minutes:[]}
+  const userPersona = new Map();
+  for (const [u,rows] of user2rows){
+    const allTags = [];
+    rows.forEach(r=>{ const it=items.get(r.i); if (it && it.tags) allTags.push(...it.tags); });
+    const key = personaOf(allTags);
+    userPersona.set(u,key);
+    if (!personaCount.has(key)) personaCount.set(key,0);
+    personaCount.set(key, personaCount.get(key)+1);
+  }
+  // stats per persona
+  for (const [u,rows] of user2rows){
+    const k = userPersona.get(u)||'General';
+    if (!personaStats.has(k)) personaStats.set(k,{users:new Set(), ratings:[], minutes:[], tags:new Map()});
+    const st = personaStats.get(k);
+    st.users.add(u);
+    for (const r of rows){
+      if (r.r>0) st.ratings.push(r.r);
+      const it=items.get(r.i);
+      if (it){
+        if (it.minutes>0) st.minutes.push(it.minutes);
+        for (const t of (it.tags||[])){ st.tags.set(t,(st.tags.get(t)||0)+1); }
+      }
+    }
+  }
+  // bar
+  const order = Array.from(personaCount.entries()).sort((a,b)=>b[1]-a[1]);
+  drawBars('barPersonas', order.map(([,c])=>c), {max:Math.max(1,...order.map(([,c])=>c))});
+  // table
+  $('personaTbl').innerHTML = order.map(([k,c])=>{
+    const st = personaStats.get(k)||{ratings:[], minutes:[], tags:new Map(), users:new Set()};
+    const topTags = Array.from(st.tags.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([t])=>t).join(', ');
+    const avgR = st.ratings.length? avg(st.ratings).toFixed(2) : '—';
+    const medM = st.minutes.length? median(st.minutes).toFixed(0) : '—';
+    return `<tr><td>${k}</td><td>${fmt(st.users.size||0)}</td><td>${topTags||'—'}</td><td>${avgR}</td><td>${medM}</td></tr>`;
+  }).join('');
+}
+
+// ---------------- event wiring ----------------
+$('btnLoad').addEventListener('click', loadAll);
+$('btnRedraw').addEventListener('click', ()=>{
+  topK = parseInt($('kTags').value,10)||200;
+  edgeMin = parseInt($('edgeMin').value,10)||40;
+  nodeCap = parseInt($('nodeCap').value,10)||80;
+  drawEverything();
+});
+
+async function loadAll(){
+  try{
+    $('status').textContent = 'Status: loading…';
+    items.clear(); users.clear(); interactions.length=0; user2rows.clear(); item2rows.clear(); tag2count.clear();
+
+    const r = await fetchFirst(['./PP_recipes.csv','./RAW_recipes.csv','data/PP_recipes.csv','data/RAW_recipes.csv']);
+    const t = await fetchFirst(['./interactions_train.csv','data/interactions_train.csv']);
+    if (!r || !t) throw new Error('CSV files not found near index.html or ./data/');
+
+    parseRecipes(r.text); loadedFiles.recipes = r.path;
+    parseInteractions(t.text); loadedFiles.inter = t.path;
 
     $('status').textContent = 'Status: loaded';
-    drawAll();
+    const badges = [
+      `Recipes: <b>${fmt(items.size)}</b>`,
+      `Users: <b>${fmt(users.size)}</b>`,
+      `Items: <b>${fmt(item2rows.size)}</b>`,
+      `Interactions: <b>${fmt(interactions.length)}</b>`,
+      `Density: <b>${(interactions.length/(Math.max(1,users.size)*Math.max(1,items.size))).toExponential(3)}</b>`,
+      `Ratings: <b>${interactions.some(x=>x.r && !Number.isNaN(x.r))?'yes':'no'}</b>`,
+      `Time: <b>${interactions.some(x=>x.ts>0)?'yes':'no'}</b>`,
+      `Minutes: <b>${Array.from(items.values()).some(x=>x.minutes>0)?'yes':'no'}</b>`,
+      `(files: ${loadedFiles.recipes}, ${loadedFiles.inter})`
+    ];
+    $('badges').innerHTML = badges.map(s=>`<span class="chip">${s}</span>`).join('');
+
+    drawEverything();
+  }catch(err){
+    console.error(err);
+    $('status').textContent = 'Status: failed to load. Ensure CSVs are in repo root or ./data/.';
   }
+}
 
-  // ---------- math utils ----------
-  function giniFromCounts(countsAsc) {
-    const n = countsAsc.length;
-    if (!n) return 0;
-    const total = countsAsc.reduce((s, v) => s + v, 0);
-    if (total === 0) return 0;
-    // trapezoid area between (0,0) and (1,1)
-    let cum = 0, area = 0;
-    let prevX = 0, prevY = 0;
-    for (let i = 0; i < n; i++) {
-      cum += countsAsc[i];
-      const x = (i + 1) / n;
-      const y = cum / total;
-      area += 0.5 * (y + prevY) * (x - prevX);
-      prevX = x; prevY = y;
-    }
-    const g = 1 - 2 * area;
-    return Math.max(0, Math.min(1, g));
-  }
-
-  function groupTs(ts, mode='month') {
-    const d = new Date(ts * 1000);
-    if (mode === 'hour') return d.toISOString().slice(0, 13) + ':00';
-    if (mode === 'day')  return d.toISOString().slice(0, 10);
-    if (mode === 'week') {
-      // ISO year-week
-      const dt = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-      const dayNum = (dt.getUTCDay() + 6) % 7;
-      dt.setUTCDate(dt.getUTCDate() - dayNum + 3);
-      const firstThursday = new Date(Date.UTC(dt.getUTCFullYear(),0,4));
-      const week = 1 + Math.round(((dt - firstThursday)/86400000 - 3)/7);
-      return `${dt.getUTCFullYear()}-W${String(week).padStart(2,'0')}`;
-    }
-    // month
-    return d.toISOString().slice(0, 7);
-  }
-
-  // ---------- charts ----------
-  function plotBar(id, x, y, title, xTitle='') {
-    Plotly.newPlot(id, [{x, y, type:'bar'}], {
-      title, margin:{t:28,l:40,r:10,b:40}, paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
-      xaxis:{title:xTitle, gridcolor:'#1c2541'}, yaxis:{gridcolor:'#1c2541'}
-    }, {displaylogo:false, responsive:true});
-  }
-  function plotHist(id, values, nbins, title, xTitle='') {
-    Plotly.newPlot(id, [{x: values, type:'histogram', nbinsx: nbins}], {
-      title, margin:{t:28,l:40,r:10,b:40}, paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
-      xaxis:{title:xTitle, gridcolor:'#1c2541'}, yaxis:{gridcolor:'#1c2541'}
-    }, {displaylogo:false, responsive:true});
-  }
-  function plotScatter(id, x, y, title, xTitle='', yTitle='') {
-    Plotly.newPlot(id, [{x, y, mode:'markers', type:'scattergl', marker:{size:6, opacity:0.7}}], {
-      title, margin:{t:28,l:50,r:10,b:50}, paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
-      xaxis:{title:xTitle, gridcolor:'#1c2541'}, yaxis:{title:yTitle, gridcolor:'#1c2541'}
-    }, {displaylogo:false, responsive:true});
-  }
-  function plotLine(id, x, y, title, xTitle='') {
-    Plotly.newPlot(id, [{x, y, mode:'lines+markers'}], {
-      title, margin:{t:28,l:40,r:10,b:40}, paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
-      xaxis:{title:xTitle, gridcolor:'#1c2541'}, yaxis:{gridcolor:'#1c2541'}
-    }, {displaylogo:false, responsive:true});
-  }
-  function plotHeat(id, z, x, y, title) {
-    Plotly.newPlot(id, [{z, x, y, type:'heatmap', colorscale:'Viridis'}], {
-      title, margin:{t:28,l:60,r:10,b:40}, paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)'
-    }, {displaylogo:false, responsive:true});
-  }
-
-  function drawCards() {
-    const nUsers = user2items.size;
-    const nItems = item2users.size;
-    const nInter = interactions.length;
-    const density = nInter / Math.max(1, nUsers * nItems);
-    const userCounts = Array.from(user2items.values(), arr => arr.length);
-    const itemCounts = Array.from(item2users.values(), s => s.size);
-    const coldUsers = userCounts.filter(c => c < 5).length;
-    const coldItems = itemCounts.filter(c => c < 5).length;
-    const ratingVals = ratingsAvail ? interactions.map(x => clamp(Number(x.r)||0, 1, 5)).filter(Number.isFinite) : [];
-    const ratingMean = ratingVals.length ? (ratingVals.reduce((a,b)=>a+b,0)/ratingVals.length) : 0;
-
-    const top1pctCount = Math.max(1, Math.floor(0.01*nItems));
-    const sortedItems = itemCounts.slice().sort((a,b)=>b-a);
-    const top1Covered = sortedItems.slice(0, top1pctCount).reduce((s,v)=>s+v,0) / Math.max(1,nInter) * 100;
-
-    const html = `
-      <div class="stat"><div class="h">Users</div><div class="v">${fmt(nUsers)}</div></div>
-      <div class="stat"><div class="h">Items</div><div class="v">${fmt(nItems)}</div></div>
-      <div class="stat"><div class="h">Interactions</div><div class="v">${fmt(nInter)}</div></div>
-      <div class="stat"><div class="h">Density</div><div class="v">${density.toExponential(2)}</div></div>
-      <div class="stat"><div class="h">Cold users &lt;5</div><div class="v">${fmt(coldUsers)}</div></div>
-      <div class="stat"><div class="h">Cold items &lt;5</div><div class="v">${fmt(coldItems)}</div></div>
-      <div class="stat"><div class="h">Ratings present</div><div class="v">${ratingsAvail ? 'yes' : 'no'}</div></div>
-      <div class="stat"><div class="h">Avg rating</div><div class="v">${ratingsAvail ? ratingMean.toFixed(2) : '—'}</div></div>
-      <div class="stat"><div class="h">Top 1% items</div><div class="v">${fmt(top1pctCount)}</div></div>
-      <div class="stat"><div class="h">% interactions by top 1%</div><div class="v">${top1Covered.toFixed(1)}%</div></div>
-    `;
-    $('cards').innerHTML = html;
-  }
-
-  function drawOverview() {
-    // time series
-    const mode = ($('timeGroup').value || 'month').toLowerCase();
-    const arr = interactions.filter(x => x.ts && Number.isFinite(x.ts));
-    const counts = _.countBy(arr, x => groupTs(x.ts, mode));
-    const keys = Object.keys(counts).sort();
-    const vals = keys.map(k => counts[k]);
-    plotLine('tsSeries', keys, vals, `Interactions over time (${mode})`, mode);
-    $('tsNote').textContent = `${fmt(vals.reduce((a,b)=>a+b,0))} events with date`;
-
-    // DOW/Hour heatmap
-    const hasHour = arr.some(x => {
-      const d = new Date(x.ts*1000);
-      return d.getUTCHours() !== 0;
-    });
-    const hours = [...Array(24).keys()];
-    const dows = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-    const grid = dows.map(()=> hours.map(()=>0));
-    for (const x of arr) {
-      const d = new Date(x.ts*1000);
-      const dow = (d.getUTCDay()+6)%7;
-      const hr = hasHour ? d.getUTCHours() : 0;
-      grid[dow][hr] += 1;
-    }
-    plotHeat('dowHeat', grid, hours, dows, 'DOW × Hour');
-  }
-
-  function drawUsers() {
-    const userCounts = Array.from(user2items.values(), arr => arr.length);
-    plotHist('userHist', userCounts, 40, 'User activity (interactions per user)', 'count');
-
-    if (!ratingsAvail) {
-      $('userScatter').innerHTML = '<div class="muted">Avg rating requires rating column</div>';
-      return;
-    }
-    // avg rating vs activity
-    const avgByUser = [];
-    for (const [u, arr] of user2items.entries()) {
-      const ratings = arr.map(x=>x.r).filter(v=>v!=null && isFinite(v));
-      if (!ratings.length) continue;
-      const mean = ratings.reduce((a,b)=>a+b,0)/ratings.length;
-      avgByUser.push({c: arr.length, m: mean});
-    }
-    plotScatter('userScatter', avgByUser.map(x=>x.c), avgByUser.map(x=>x.m), 'User avg rating vs activity', 'interactions', 'avg rating');
-  }
-
-  function drawItems() {
-    const itemCounts = Array.from(item2users.values(), s => s.size);
-    plotHist('itemHist', itemCounts, 50, 'Item popularity (interactions per item)', 'count');
-
-    if (ratingsAvail) {
-      // per-item avg rating vs popularity
-      const byItem = new Map(); // i -> {sum, n}
-      for (const row of interactions) {
-        if (row.r == null || !isFinite(row.r)) continue;
-        const o = byItem.get(row.i) || {sum:0,n:0};
-        o.sum += row.r; o.n += 1;
-        byItem.set(row.i, o);
-      }
-      const xs=[], ys=[];
-      for (const [i,o] of byItem.entries()) {
-        xs.push(o.n);
-        ys.push(o.sum/o.n);
-      }
-      plotScatter('itemScatter', xs, ys, 'Item avg rating vs popularity', 'interactions', 'avg rating');
-    } else {
-      $('itemScatter').innerHTML = '<div class="muted">Avg rating requires rating column</div>';
-    }
-
-    const recList = Array.from(recipes.values());
-    if (minutesAvail) {
-      const mins = recList.map(r=> Number(r.minutes)).filter(v=>isFinite(v) && v>=0 && v<600);
-      plotHist('minutesHist', mins, 40, 'Recipe time (minutes)', 'minutes');
-    } else {
-      $('minutesHist').innerHTML = '<div class="muted">minutes column not found</div>';
-    }
-
-    if (nIngAvail) {
-      const ings = recList.map(r=> Number(r.n_ingredients)).filter(v=>isFinite(v) && v>=0 && v<=80);
-      plotHist('ingCountHist', ings, 40, 'Ingredients count', 'count');
-    } else {
-      $('ingCountHist').innerHTML = '<div class="muted">n_ingredients/ingredients_count not found</div>';
-    }
-  }
-
-  function drawTags() {
-    const K = parseInt(($('topK').value||'200'),10);
-    const top = Array.from(tagFreq.entries()).sort((a,b)=>b[1]-a[1]).slice(0, Math.max(30, Math.min(1000, K)));
-    const top30 = top.slice(0,30);
-    plotBar('topTags', top30.map(([t])=>t), top30.map(([,c])=>c), 'Top tags (top 30)', '');
-
-    // co-occurrence graph among top-N nodes
-    const nodeMax = parseInt(($('nodeMax').value||'60'),10);
-    const nodeTags = new Set(top.slice(0, nodeMax).map(([t])=>t));
-    const edgeMin = parseInt(($('edgeMin').value||'40'),10);
-
-    // build index of tags per recipe for only recipes that appear in interactions
-    const usedItems = new Set(interactions.map(x=>x.i));
-    const co = new Map(); // "a||b" -> count
-    for (const iid of usedItems) {
-      const rec = recipes.get(iid); if (!rec) continue;
-      const ts = (rec.tags || []).filter(t=>nodeTags.has(t));
-      if (ts.length>1) {
-        for (let i=0;i<ts.length;i++){
-          for (let j=i+1;j<ts.length;j++){
-            const a = ts[i], b = ts[j];
-            const key = a < b ? `${a}||${b}` : `${b}||${a}`;
-            co.set(key, (co.get(key)||0)+1);
-          }
-        }
-      }
-    }
-    const nodes = Array.from(nodeTags).map((t,idx)=>({id:t, idx}));
-    const nodeIndex = new Map(nodes.map((n,i)=>[n.id,i]));
-    const edges = [];
-    for (const [k,c] of co.entries()){
-      if (c < edgeMin) continue;
-      const [a,b] = k.split('||');
-      const s = nodeIndex.get(a), t = nodeIndex.get(b);
-      if (s==null || t==null) continue;
-      edges.push({source:s, target:t, weight:c});
-    }
-    drawForceGraph('tagGraph', nodes, edges);
-  }
-
-  function drawTime() {
-    if (ratingsAvail) {
-      const ratings = interactions.map(x=> clamp(Number(x.r)||0, 1, 5)).filter(Number.isFinite);
-      plotHist('ratingHist', ratings, 20, 'Ratings histogram', 'rating (1–5)');
-    } else {
-      $('ratingHist').innerHTML = '<div class="muted">No ratings column found</div>';
-    }
-
-    // calendar distribution (by month or week)
-    const mode = ($('timeGroup').value || 'month').toLowerCase();
-    const arr = interactions.filter(x => x.ts && Number.isFinite(x.ts));
-    const counts = _.countBy(arr, x => groupTs(x.ts, mode));
-    const keys = Object.keys(counts).sort();
-    const vals = keys.map(k => counts[k]);
-    plotBar('calendar', keys, vals, `Interactions by ${mode}`, mode);
-  }
-
-  function drawCold() {
-    // Lorenz & Gini
-    const itemCounts = Array.from(item2users.values(), s => s.size);
-    const asc = itemCounts.slice().sort((a,b)=>a-b);
-    const total = asc.reduce((s,v)=>s+v,0) || 1;
-    const lorX = [], lorY = [];
-    let cum=0;
-    for (let i=0;i<asc.length;i++){
-      cum += asc[i];
-      lorX.push((i+1)/asc.length);
-      lorY.push(cum/total);
-    }
-    Plotly.newPlot('lorenz', [
-      {x:[0,1], y:[0,1], mode:'lines', line:{dash:'dot'}, name:'equality'},
-      {x:lorX, y:lorY, mode:'lines', name:'observed'}
-    ], {
-      title:'Lorenz curve', margin:{t:28,l:40,r:10,b:40}, paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
-      xaxis:{title:'fraction of items', gridcolor:'#1c2541'}, yaxis:{title:'fraction of interactions', gridcolor:'#1c2541'},
-      legend:{orientation:'h'}
-    }, {displaylogo:false, responsive:true});
-
-    const g = giniFromCounts(asc);
-    $('giniLine').textContent = `Gini ≈ ${g.toFixed(3)}`;
-
-    // Pareto coverage
-    const nItems = item2users.size;
-    const topK = Math.max(1, Math.floor(0.01*nItems));
-    const desc = itemCounts.slice().sort((a,b)=>b-a);
-    const covered = desc.slice(0, topK).reduce((s,v)=>s+v,0) / Math.max(1, interactions.length) * 100;
-    plotBar('pareto', ['Top 1% items','Others'], [covered, 100-covered], 'Pareto coverage', '%');
-    $('paretoNote').textContent = `Top ${fmt(topK)} items (~1%) cover ${covered.toFixed(1)}% of all interactions.`;
-  }
-
-  // ---------- force graph (D3) ----------
-  function drawForceGraph(svgId, nodes, links){
-    const svg = d3.select(`#${svgId}`);
-    svg.selectAll('*').remove();
-
-    const width = svg.node().clientWidth || 800;
-    const height = svg.node().clientHeight || 500;
-
-    const zoom = d3.zoom().scaleExtent([0.3, 4]).on("zoom", (e) => g.attr("transform", e.transform));
-    const g = svg.append("g");
-    svg.call(zoom);
-
-    const sim = d3.forceSimulation(nodes)
-      .force("link", d3.forceLink(links).id(d=>d.idx).distance(d=>100 + (300/Math.sqrt(d.weight||1))))
-      .force("charge", d3.forceManyBody().strength(-200))
-      .force("center", d3.forceCenter(width/2, height/2));
-
-    const link = g.append("g").attr("stroke","#6b7fa8").attr("stroke-opacity",0.6)
-      .selectAll("line").data(links).enter().append("line")
-      .attr("stroke-width", d => Math.max(1, Math.log2(1+d.weight)));
-
-    const node = g.append("g").selectAll("circle").data(nodes).enter().append("circle")
-      .attr("r", 6)
-      .attr("fill", "#9fccff")
-      .attr("stroke", "#274b7a")
-      .attr("stroke-width", 1.2)
-      .call(d3.drag()
-        .on("start", (event,d) => { if (!event.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
-        .on("drag", (event,d) => { d.fx = event.x; d.fy = event.y; })
-        .on("end",  (event,d) => { if (!event.active) sim.alphaTarget(0); d.fx = null; d.fy = null; }));
-
-    const labels = g.append("g").selectAll("text").data(nodes).enter().append("text")
-      .text(d=>d.id).attr("font-size", 10).attr("fill", "#e6efff");
-
-    sim.on("tick", () => {
-      link.attr("x1", d => d.source.x)
-          .attr("y1", d => d.source.y)
-          .attr("x2", d => d.target.x)
-          .attr("y2", d => d.target.y);
-      node.attr("cx", d => d.x).attr("cy", d => d.y);
-      labels.attr("x", d => d.x + 8).attr("y", d => d.y + 3);
-    });
-  }
-
-  // ---------- draw all ----------
-  function drawAll(){
-    drawCards();
-    drawOverview();
-    drawUsers();
-    drawItems();
-    drawTags();
-    drawTime();
-    drawCold();
-  }
-
-  // ---------- tabs ----------
-  function bindTabs(){
-    const nav = $('tabs');
-    nav.addEventListener('click', (e)=>{
-      const btn = e.target.closest('.tab'); if (!btn) return;
-      document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
-      const tab = btn.dataset.tab;
-      document.querySelectorAll('.tabpane').forEach(p=>p.classList.remove('active'));
-      $(tab).classList.add('active');
-      // on demand redraw sizing-sensitive charts
-      if (tab === 'tags') drawTags();
-      if (tab === 'overview') drawOverview();
-      if (tab === 'items') drawItems();
-      if (tab === 'users') drawUsers();
-      if (tab === 'time') drawTime();
-      if (tab === 'cold') drawCold();
-    });
-  }
-
-  // ---------- events ----------
-  window.addEventListener('resize', _.throttle(()=>{
-    const active = document.querySelector('.tabpane.active')?.id;
-    if (active) {
-      if (active==='overview') drawOverview();
-      else if (active==='users') drawUsers();
-      else if (active==='items') drawItems();
-      else if (active==='tags') drawTags();
-      else if (active==='time') drawTime();
-      else if (active==='cold') drawCold();
-    }
-  }, 400));
-
-  $('btnLoad').addEventListener('click', ()=>{
-    loadAll().catch(err => {
-      console.error(err);
-      $('status').textContent = 'Status: failed to load/parse CSVs (see console)';
-    });
-  });
-  $('btnRedraw').addEventListener('click', ()=> drawAll());
-  $('topK').addEventListener('change', ()=> drawTags());
-  $('edgeMin').addEventListener('change', ()=> drawTags());
-  $('nodeMax').addEventListener('change', ()=> drawTags());
-  $('timeGroup').addEventListener('change', ()=> { drawOverview(); drawTime(); });
-
-  bindTabs();
-})();
+function drawEverything(){
+  renderBadges();
+  renderCounters();
+  renderKPIs();
+  drawOverview();
+  drawUsers();
+  drawItems();
+  drawTags();
+  drawTime();
+  drawLongtail();
+  drawPersonas();
+}
