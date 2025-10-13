@@ -1,127 +1,139 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Food Recommender — EDA (business-first, 2025)</title>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
   <style>
     :root{
-      --bg:#0b1020; --panel:#0f172a; --ink:#e5e7eb; --muted:#94a3b8; --line:#1f2937; --accent:#60a5fa;
+      --bg:#0b1220; --panel:#0f172a; --ink:#e5e7eb; --muted:#94a3b8; --line:#1f2937; --accent:#60a5fa;
     }
     *{box-sizing:border-box}
-    body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink)}
-    header{padding:24px 20px 6px;max-width:1280px;margin:0 auto}
-    h1{font-size:28px;margin:0 0 8px}
-    header p{margin:0;color:var(--muted)}
-    nav{display:flex;gap:8px;margin:14px 0 0}
-    nav button{background:#0b1220;color:#cbd5e1;border:1px solid #1f2937;border-radius:10px;padding:10px 14px;cursor:pointer}
-    nav button.active{background:#111827;color:#fff;border-color:#374151}
-    .wrap{max-width:1280px;margin:0 auto;padding:0 20px 50px}
-    .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:14px 0}
-    .toolbar .pill{display:inline-flex;align-items:center;gap:8px;background:#0b1220;border:1px solid #1f2937;border-radius:999px;padding:8px 12px;color:#cbd5e1}
-    .toolbar input{background:transparent;border:none;color:#e5e7eb;width:90px}
-    .toolbar button{background:var(--accent);color:#001225;border:none;border-radius:10px;padding:10px 14px;font-weight:600;cursor:pointer}
-    .muted{color:var(--muted)}
-    .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin:12px 0}
+    body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+    header{max-width:1200px;margin:0 auto;padding:22px 16px 8px}
+    h1{margin:0;font-size:26px}
+    header p{margin:6px 0 0;color:var(--muted);font-size:14px}
+    .wrap{max-width:1200px;margin:0 auto;padding:8px 16px 80px}
+    .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0 16px}
+    .pill{display:flex;align-items:center;gap:8px;background:#0a1020;border:1px solid var(--line);color:#cbd5e1;border-radius:999px;padding:8px 12px}
+    input[type="number"],input[type="text"],select{background:#0a1020;border:1px solid var(--line);border-radius:8px;color:var(--ink);padding:6px 10px}
+    button{background:var(--accent);color:#041220;border:none;border-radius:10px;padding:8px 12px;font-weight:700;cursor:pointer}
+    .status{color:var(--muted)}
+    .tabs{display:flex;gap:8px;margin:6px 0 12px}
+    .tabs button{background:#0c1426;border:1px solid var(--line);color:#cbd5e1}
+    .tabs button.active{background:#111827;color:#fff;border-color:#334155}
+    .pane{display:none}
+    .pane.active{display:block}
     .grid{display:grid;gap:14px}
     .g2{grid-template-columns:1fr 1fr}
     .g3{grid-template-columns:1fr 1fr 1fr}
-    .g4{grid-template-columns:1fr 1fr 1fr 1fr}
-    canvas{width:100%;height:280px;background:#0b1220;border:1px solid var(--line);border-radius:10px;display:block}
-    table{width:100%;border-collapse:collapse;font-size:14px}
-    th,td{padding:10px;border-bottom:1px solid #1f2937;text-align:left}
-    th{color:#cbd5e1;font-weight:600}
-    .bad{color:#f87171} .ok{color:#34d399}
-    .tabpane.hidden{display:none}
-    .kpis{display:flex;gap:10px;flex-wrap:wrap}
-    .chip{background:#0b1220;border:1px solid #1f2937;color:#e5e7eb;padding:6px 10px;border-radius:999px}
+    .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+    .kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+    .chip{display:inline-flex;gap:6px;background:#0b1426;border:1px solid var(--line);border-radius:999px;padding:6px 10px;margin:2px 6px 0 0;color:#cbd5e1}
+    canvas{width:100%;height:260px;background:#0b1420;border:1px solid var(--line);border-radius:10px;display:block}
+    .muted{color:var(--muted)}
+    .h320{height:320px}
   </style>
 </head>
 <body>
   <header>
     <h1>Food Recommender — EDA (business-first, 2025)</h1>
-    <p>Reads <code>RAW_recipes.csv</code> or <code>PP_recipes.csv</code> + <code>interactions_train.csv</code> from this repo. No server, no build — just GitHub Pages.</p>
-    <nav>
-      <button class="tab active" data-tab="overview">Overview</button>
-      <button class="tab" data-tab="users">Users</button>
-      <button class="tab" data-tab="items">Items</button>
-      <button class="tab" data-tab="tags">Tags</button>
-      <button class="tab" data-tab="time">Time</button>
-      <button class="tab" data-tab="longtail">Long-tail & Cold-start</button>
-      <button class="tab" data-tab="personas">Personas</button>
-    </nav>
+    <p>Reads <code>RAW_recipes.csv</code> or <code>PP_recipes.csv</code> + <code>interactions_train.csv</code> from this repo (or <code>/data/</code>). No server, no build — just GitHub Pages.</p>
   </header>
 
   <div class="wrap">
+    <!-- toolbar -->
     <div class="toolbar">
       <button id="btnLoad">Load data</button>
-      <span id="status" class="muted">Status: —</span>
-      <span class="pill">Top-K tags <input id="kTags" type="number" value="200" min="50" max="1000"></span>
+      <span id="status" class="status">Status: —</span>
+      <span class="pill">Top-K tags <input id="topK" type="number" value="200" min="30" max="1000"></span>
       <button id="btnRedraw">Redraw</button>
-      <span class="pill">Tag network edges ≥ <input id="edgeMin" type="number" value="40" min="5" max="300"></span>
-      <span class="pill">Nodes ≤ <input id="nodeCap" type="number" value="80" min="20" max="300"></span>
-      <span class="pill">Time group <input id="timeGroup" type="text" value="month" /></span>
+      <span class="pill">Tag network edges ≥ <input id="minEdge" type="number" value="40" min="1" max="1000"></span>
+      <span class="pill">Nodes ≤ <input id="maxNodes" type="number" value="80" min="20" max="400"></span>
+      <span class="pill">Time group
+        <select id="timeGroup">
+          <option value="month" selected>month</option>
+          <option value="week">week</option>
+          <option value="day">day</option>
+        </select>
+      </span>
     </div>
 
-    <!-- dataset badges -->
-    <div class="kpis" id="badges"></div>
+    <!-- quick counters -->
+    <div class="toolbar" id="badges"></div>
 
-    <!-- OVERVIEW -->
-    <section id="overview" class="tabpane">
-      <div class="grid g3">
+    <!-- tabs -->
+    <div class="tabs">
+      <button class="tab active" data-pane="pOverview">Overview</button>
+      <button class="tab" data-pane="pUsers">Users</button>
+      <button class="tab" data-pane="pItems">Items</button>
+      <button class="tab" data-pane="pTags">Tags</button>
+      <button class="tab" data-pane="pTime">Time</button>
+      <button class="tab" data-pane="pLong">Long-tail & Cold-start</button>
+      <button class="tab" data-pane="pPersonas">Personas</button>
+    </div>
+
+    <!-- Overview -->
+    <section id="pOverview" class="pane active">
+      <div class="grid g2">
         <div class="card">
           <h3>Counters</h3>
-          <div id="counters" class="kpis"></div>
+          <div id="kpis" class="kpis"></div>
         </div>
         <div class="card">
           <h3>KPIs</h3>
-          <div id="kpibox" class="kpis"></div>
-        </div>
-        <div class="card">
-          <h3>Day-of-week × hour heatmap</h3>
-          <canvas id="dowHour"></canvas>
-          <div class="muted" style="margin-top:6px">If hours are missing in your CSV dates, this collapses to the date level.</div>
+          <div id="kpi2" class="kpis"></div>
         </div>
       </div>
-
       <div class="grid g2">
         <div class="card">
           <h3>Interactions over time</h3>
-          <canvas id="lineInteractions"></canvas>
+          <canvas id="lineInteractions" class="h320"></canvas>
         </div>
+        <div class="card">
+          <h3>Day-of-week × hour heatmap</h3>
+          <canvas id="heatDOW"></canvas>
+          <div class="muted" style="margin-top:6px">If hours are missing in your CSV dates, this collapses to the date level.</div>
+        </div>
+      </div>
+      <div class="grid g2">
         <div class="card">
           <h3>Ratings histogram</h3>
           <canvas id="histRatings"></canvas>
         </div>
+        <div class="card">
+          <h3>Top tags (bar)</h3>
+          <canvas id="topTags"></canvas>
+        </div>
       </div>
     </section>
 
-    <!-- USERS -->
-    <section id="users" class="tabpane hidden">
+    <!-- Users -->
+    <section id="pUsers" class="pane">
       <div class="grid g2">
         <div class="card">
           <h3>User activity (interactions per user)</h3>
-          <canvas id="histUser"></canvas>
+          <canvas id="userActivity"></canvas>
         </div>
         <div class="card">
           <h3>User avg rating vs activity</h3>
-          <canvas id="scatterUser"></canvas>
+          <canvas id="userAvgVsCnt"></canvas>
         </div>
       </div>
     </section>
 
-    <!-- ITEMS -->
-    <section id="items" class="tabpane hidden">
+    <!-- Items -->
+    <section id="pItems" class="pane">
       <div class="grid g2">
         <div class="card">
           <h3>Item popularity (interactions per item)</h3>
-          <canvas id="histItem"></canvas>
+          <canvas id="itemPopularity"></canvas>
         </div>
         <div class="card">
           <h3>Item avg rating vs popularity</h3>
-          <canvas id="scatterItem"></canvas>
+          <canvas id="itemAvgVsCnt"></canvas>
         </div>
       </div>
       <div class="grid g2">
@@ -131,76 +143,67 @@
         </div>
         <div class="card">
           <h3>Ingredients count</h3>
-          <canvas id="histIngr"></canvas>
+          <canvas id="histNing"></canvas>
         </div>
       </div>
     </section>
 
-    <!-- TAGS -->
-    <section id="tags" class="tabpane hidden">
+    <!-- Tags -->
+    <section id="pTags" class="pane">
       <div class="grid g2">
         <div class="card">
-          <h3>Top tags (top 30)</h3>
-          <canvas id="barTags"></canvas>
+          <h3>Top 30 tags</h3>
+          <canvas id="top30"></canvas>
         </div>
         <div class="card">
-          <h3>Tag co-occurrence graph</h3>
-          <canvas id="tagGraph"></canvas>
-          <div class="muted">Edges show how often tags appear together on the same recipe. Controlled by “edges ≥” and “nodes ≤”.</div>
+          <h3>Tag co-occurrence graph (simple)</h3>
+          <canvas id="tagGraph" class="h320"></canvas>
+          <div class="muted">Edges show how often tags appear together on the same recipe. Use the thresholds above then “Redraw”.</div>
         </div>
       </div>
     </section>
 
-    <!-- TIME -->
-    <section id="time" class="tabpane hidden">
+    <!-- Time -->
+    <section id="pTime" class="pane">
       <div class="grid g2">
         <div class="card">
           <h3>Ratings histogram</h3>
           <canvas id="histRatings2"></canvas>
         </div>
         <div class="card">
-          <h3>Interactions by month</h3>
-          <canvas id="lineInteractions2"></canvas>
+          <h3>Interactions by calendar date</h3>
+          <canvas id="lineCalendar"></canvas>
         </div>
       </div>
     </section>
 
-    <!-- LONGTAIL -->
-    <section id="longtail" class="tabpane hidden">
+    <!-- Long tail -->
+    <section id="pLong" class="pane">
       <div class="grid g2">
         <div class="card">
           <h3>Lorenz curve (popularity long-tail)</h3>
           <canvas id="lorenz"></canvas>
-          <div class="muted" id="giniLine">Gini ≈ —</div>
+          <div id="giniLine" class="muted" style="margin-top:6px">Gini ≈ —</div>
         </div>
         <div class="card">
           <h3>Cold-start & Pareto</h3>
           <canvas id="pareto"></canvas>
-          <div class="muted" id="paretoLine">—</div>
+          <div id="paretoLine" class="muted" style="margin-top:6px">—</div>
         </div>
       </div>
     </section>
 
-    <!-- PERSONAS -->
-    <section id="personas" class="tabpane hidden">
-      <div class="grid g2">
-        <div class="card">
-          <h3>Persona counts (from tags)</h3>
-          <canvas id="barPersonas"></canvas>
-        </div>
-        <div class="card">
-          <h3>Persona summary</h3>
-          <table>
-            <thead>
-              <tr><th>Persona</th><th>Users</th><th>Top tags</th><th>Avg rating</th><th>Median minutes</th></tr>
-            </thead>
-            <tbody id="personaTbl"><tr><td class="muted" colspan="5">—</td></tr></tbody>
-          </table>
-        </div>
+    <!-- Personas -->
+    <section id="pPersonas" class="pane">
+      <div class="card">
+        <h3>Lightweight recipe personas (rule-based)</h3>
+        <div id="personas" class="kpis"></div>
+        <div class="muted" style="margin-top:6px">Heuristic groups to guide feature strategy (e.g., “<i>busy & health-conscious</i>”: ≤30 min + low-fat/low-calorie tags).</div>
       </div>
     </section>
   </div>
 
-  <script defer src="eda-app.js"></script>
+  <!-- IMPORTANT: one script, loaded with defer so handlers attach after DOM -->
+  <script defer src="eda.js"></script>
 </body>
 </html>
