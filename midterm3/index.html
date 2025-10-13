@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
@@ -8,123 +8,142 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
   <style>
     :root{
-      --bg:#0f172a; --panel:#111827; --muted:#9ca3af; --ink:#e5e7eb; --line:#1f2937;
-      --button:#1f2937; --accent:#60a5fa; --ok:#34d399; --bad:#f87171; --card:#0b1220;
+      --bg:#0f172a;--panel:#111827;--line:#1f2937;--ink:#e5e7eb;--muted:#9ca3af;--accent:#60a5fa;--ok:#34d399;--bad:#f87171;--card:#0b1220;
     }
     *{box-sizing:border-box}
-    body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-    header{max-width:1200px;margin:0 auto;padding:22px 18px 8px}
-    h1{margin:0 0 6px;font-weight:800;font-size:28px}
+    body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+    header{padding:22px 18px 8px;max-width:1200px;margin:0 auto}
+    h1{margin:0 0 6px;font-size:28px}
     header p{margin:0;color:var(--muted)}
-    nav{display:flex;gap:8px;margin:16px 0}
+    nav{display:flex;gap:8px;margin:14px 0}
     nav button{background:#0b1220;color:#cbd5e1;border:1px solid var(--line);border-radius:10px;padding:10px 14px;cursor:pointer}
     nav button.active{background:#111827;color:#fff;border-color:#374151}
     .wrap{max-width:1200px;margin:0 auto;padding:0 18px 60px}
-    .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
-    .pill{display:inline-flex;align-items:center;gap:8px;background:#0b1220;border:1px solid #1f2937;border-radius:999px;padding:8px 10px;color:#cbd5e1}
-    .pill input{width:90px;background:transparent;border:none;color:#e5e7eb;outline:none}
-    .btn{background:var(--accent);color:#00122b;border:none;border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer}
     .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin:12px 0}
     .grid{display:grid;gap:14px}
     .g2{grid-template-columns:1fr 1fr}
-    .muted{color:var(--muted)}
-    textarea{width:100%;height:220px;background:var(--card);border:1px solid var(--line);border-radius:10px;color:#e5e7eb;padding:12px;resize:vertical}
-    canvas{width:100%;height:300px;background:var(--card);border:1px solid var(--line);border-radius:10px}
+    .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+    .pill{display:inline-flex;align-items:center;gap:6px;background:#0b1220;border:1px solid var(--line);border-radius:999px;padding:6px 10px;color:#cbd5e1}
+    input[type="number"],input[type="text"]{background:#0b1220;border:1px solid #1f2937;border-radius:8px;color:#e5e7eb;padding:8px 10px;width:96px}
+    textarea{width:100%;height:220px;background:#0b1220;border:1px solid var(--line);color:#e5e7eb;border-radius:10px;padding:10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+    button.primary{background:var(--accent);color:#00122b;border:none;border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer}
+    .muted{color:var(--muted)} .ok{color:var(--ok)} .bad{color:var(--bad)} .hidden{display:none}
     table{width:100%;border-collapse:collapse}
     th,td{padding:10px;border-bottom:1px solid var(--line);text-align:left}
-    th{color:#cbd5e1}
-    .hidden{display:none}
+    th{color:#cbd5e1;font-weight:600}
+    canvas{width:100%;height:260px;background:var(--card);border:1px solid var(--line);border-radius:10px;display:block}
   </style>
 </head>
 <body>
 <header>
   <h1>Cook-Next Recommender — Retriever → SASRec → PPR</h1>
-  <p>In-browser TensorFlow.js. Load CSVs from <code>./data/</code>. Train a Two-Tower retriever (tags-aware), then SASRec (Transformer) on sequences, with optional graph re-rank.</p>
+  <p>Train a content-aware <b>Two-Tower</b> retriever on IDs+tags, then a <b>SASRec</b> (Transformer) “cook-next” ranker on user sequences.
+     Optional graph re-rank via Personalized PageRank. Runs fully in-browser with TensorFlow.js.</p>
   <nav>
     <button class="tab active" data-tab="data">Data</button>
     <button class="tab" data-tab="train">Train</button>
     <button class="tab" data-tab="demo">Demo</button>
+    <button class="tab" data-tab="metrics">Metrics</button>
   </nav>
 </header>
 
 <div class="wrap">
-
-  <!-- DATA -->
+  <!-- Data -->
   <section id="data" class="tabpane">
-    <div class="toolbar">
-      <button id="btnLoad" class="btn">Load CSVs</button>
-      <span id="loadLine" class="muted">Status: —</span>
+    <div class="card">
+      <div class="toolbar">
+        <button id="btnLoad" class="primary">Load CSVs from ./data/</button>
+        <span id="dataLine" class="muted">—</span>
+      </div>
+      <div class="grid g2">
+        <div>
+          <h3>Item embeddings projection (train a model first)</h3>
+          <canvas id="proj"></canvas>
+        </div>
+        <div>
+          <h3>Notes</h3>
+          <p class="muted">The loader tries <code>data/RAW_recipes.csv</code> or <code>data/PP_recipes.csv</code> and
+             <code>data/interactions_train.csv</code>. Timestamps are used when present; otherwise
+             order of appearance is used for sequences.</p>
+        </div>
+      </div>
     </div>
-    <div id="counters" class="card muted">—</div>
   </section>
 
-  <!-- TRAIN -->
+  <!-- Train -->
   <section id="train" class="tabpane hidden">
     <div class="grid g2">
       <div class="card">
         <h3>Two-Tower retriever (ID + tags)</h3>
         <div class="toolbar">
-          <span class="pill">emb <input id="ttEmb" type="number" value="32" min="8" max="128"></span>
-          <span class="pill">epochs <input id="ttEp" type="number" value="4" min="1" max="20"></span>
-          <span class="pill">batch <input id="ttBa" type="number" value="256" min="32" max="2048"></span>
-          <span class="pill">lr <input id="ttLr" type="text" value="0.001"></span>
-          <span class="pill">#tag feats <input id="ttK" type="number" value="200" min="32" max="1024"></span>
-          <span class="pill">max rows <input id="ttMax" type="number" value="80000"></span>
-          <button id="btnTrainTT" class="btn">Train Two-Tower</button>
+          <label class="pill">emb <input id="embTT" type="number" value="32" min="8" max="128"></label>
+          <label class="pill">epochs <input id="epTT" type="number" value="4" min="1" max="20"></label>
+          <label class="pill">batch <input id="bsTT" type="number" value="256" min="32" max="1024"></label>
+          <label class="pill">lr <input id="lrTT" type="text" value="0.001"></label>
+          <label class="pill">#tag feats <input id="kTags" type="number" value="200" min="32" max="1024"></label>
+          <label class="pill">max rows <input id="maxRowsTT" type="number" value="80000"></label>
+          <button id="btnTrainTT" class="primary">Train Two-Tower</button>
         </div>
-        <textarea id="ttLog" readonly>—</textarea>
+        <textarea id="logTT" readonly>—</textarea>
       </div>
 
       <div class="card">
         <h3>SASRec ranker (Transformer, cook-next)</h3>
         <div class="toolbar">
-          <span class="pill">d <input id="saD" type="number" value="32" min="16" max="128"></span>
-          <span class="pill">L (max len) <input id="saL" type="number" value="30" min="10" max="200"></span>
-          <span class="pill">neg <input id="saNeg" type="number" value="5" min="1" max="20"></span>
-          <span class="pill">epochs <input id="saEp" type="number" value="3" min="1" max="20"></span>
-          <span class="pill">batch <input id="saBa" type="number" value="256" min="32" max="2048"></span>
-          <span class="pill">lr <input id="saLr" type="text" value="0.001"></span>
-          <span class="pill">max seq rows <input id="saMax" type="number" value="120000"></span>
-          <button id="btnTrainSA" class="btn">Train SASRec</button>
+          <label class="pill">d <input id="dS" type="number" value="32" min="16" max="128"></label>
+          <label class="pill">L (max len) <input id="lenS" type="number" value="30" min="8" max="100"></label>
+          <label class="pill">neg <input id="negS" type="number" value="5" min="1" max="50"></label>
+          <label class="pill">epochs <input id="epS" type="number" value="3" min="1" max="20"></label>
+          <label class="pill">batch <input id="bsS" type="number" value="256" min="32" max="1024"></label>
+          <label class="pill">lr <input id="lrS" type="text" value="0.001"></label>
+          <label class="pill">max seq rows <input id="maxSeqRows" type="number" value="120000"></label>
+          <button id="btnTrainS" class="primary">Train SASRec</button>
         </div>
-        <textarea id="saLog" readonly>—</textarea>
+        <textarea id="logS" readonly>—</textarea>
       </div>
-    </div>
-
-    <div class="card">
-      <h3>Item embeddings projection (train a model first)</h3>
-      <canvas id="proj"></canvas>
-      <div class="muted">Shows a quick 2-D SVD projection of item embeddings (from the last trained model).</div>
     </div>
   </section>
 
-  <!-- DEMO -->
+  <!-- Demo -->
   <section id="demo" class="tabpane hidden">
     <div class="card">
       <div class="toolbar">
-        <button id="btnDemo" class="btn">Recommend next (random user)</button>
-        <span class="pill"><input id="usePPR" type="checkbox"> use PPR re-rank</span>
-        <span id="demoLine" class="muted">—</span>
+        <button id="btnDemo" class="primary">Recommend next (random user)</button>
+        <label class="pill"><input id="usePPR" type="checkbox"> use PPR re-rank</label>
+        <span id="demoLine" class="muted">Need ≥2 events per user for sequences.</span>
       </div>
       <div class="grid g2">
         <div>
           <h3>History (last 15)</h3>
-          <table><thead><tr><th>#</th><th>Recipe</th></tr></thead><tbody id="histTbl"></tbody></table>
+          <table>
+            <thead><tr><th>#</th><th>Recipe</th><th>★</th></tr></thead>
+            <tbody id="histTbl"></tbody>
+          </table>
         </div>
         <div>
           <h3>Top-10 next</h3>
-          <table><thead><tr><th>#</th><th>Recipe</th><th>score</th></tr></thead><tbody id="recTbl"></tbody></table>
+          <table>
+            <thead><tr><th>#</th><th>Recipe</th><th>score</th></tr></thead>
+            <tbody id="recsTbl"></tbody>
+          </table>
         </div>
       </div>
     </div>
   </section>
 
+  <!-- Metrics -->
+  <section id="metrics" class="tabpane hidden">
+    <div class="card">
+      <h3>Training summary</h3>
+      <div id="metricsBody" class="muted">—</div>
+    </div>
+  </section>
 </div>
 
 <script defer src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.18.0/dist/tf.min.js"></script>
 <script defer src="two-tower.js"></script>
 <script defer src="sasrec.js"></script>
-<script defer src="ppr.js"></script>
+<script defer src="graph.js"></script>
 <script defer src="app.js"></script>
 </body>
 </html>
