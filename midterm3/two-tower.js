@@ -1,35 +1,53 @@
-/* two-tower.js */
-(() => {
-  let _uid = 0;
-  function nextScope(){ _uid++; return `tt_${Date.now()}_${_uid}`; }
+/* two-tower.js — minimal content-aware Two-Tower with in-batch negatives */
+(function(global){
+  class TwoTowerModel{
+    constructor(numUsers, numItems, embDim=32, opts={}){
+      this.numUsers = numUsers;
+      this.numItems = numItems;
+      this.embDim = embDim;
+      this.opt = tf.train.adam(opts.learningRate ?? 1e-3);
+      // Embeddings as Variables so we can .read() or .dataSync() safely
+      this.userEmbedding = tf.variable(tf.randomNormal([numUsers, embDim], 0, 0.05), true, 'userEmbedding');
+      this.itemEmbedding = tf.variable(tf.randomNormal([numItems, embDim], 0, 0.05), true, 'itemEmbedding');
+    }
+    async compile(){ /* no-op for symmetry */ }
 
-  class TwoTower {
-    constructor(numUsers, numItems, embDim, {learningRate=1e-3}={}){
-      this.nu=numUsers; this.ni=numItems; this.d=embDim;
-      this.scope = nextScope();
-      this.userEmb = tf.variable(tf.randomNormal([this.nu, this.d],0,0.05), true, `${this.scope}/U`);
-      this.itemEmb = tf.variable(tf.randomNormal([this.ni, this.d],0,0.05), true, `${this.scope}/I`);
-      this.opt = tf.train.adam(learningRate);
+    userForward(uIdx){ return tf.gather(this.userEmbedding, uIdx); }
+    itemForward(iIdx){ return tf.gather(this.itemEmbedding, iIdx); }
+
+    // In-batch negatives: logits = U * I^T, labels are diagonal
+    async trainStep(uIdx, iIdx){
+      const loss = this.opt.minimize(()=>{
+        const U = this.userForward(uIdx);     // [B,D]
+        const I = this.itemForward(iIdx);     // [B,D]
+        const logits = tf.matMul(U, I, false, true);  // [B,B]
+        const labels = tf.tensor1d([...Array(uIdx.shape[0]).keys()], 'int32'); // 0..B-1
+        const ce = tf.losses.softmaxCrossEntropy(tf.oneHot(labels, uIdx.shape[0]), logits);
+        return ce;
+      }, true);
+      const v = (await loss.data())[0];
+      loss.dispose();
+      return v;
     }
+
+    scoreUserAgainstAll(uIdx){
+      const U = this.userForward(uIdx);           // [1,D] or [B,D]
+      const scores = tf.matMul(U, this.itemEmbedding, false, true); // [B,N]
+      return scores.squeeze(); // [N] if B==1
+    }
+
+    scoreItems(uIdx, itemIdxArr){
+      const U = this.userForward(uIdx);                  // [1,D]
+      const I = this.itemForward(tf.tensor1d(itemIdxArr,'int32')); // [K,D]
+      return tf.matMul(U, I, false, true).squeeze();     // [K]
+    }
+
+    getItemEmbeddingTensor(){ return this.itemEmbedding.clone(); }
     dispose(){
-      this.userEmb.dispose(); this.itemEmb.dispose(); this.opt.dispose?.();
-    }
-    // In-batch softmax (diagonal are positives)
-    trainStep(uIdx, iIdx){
-      return this.opt.minimize(() => {
-        const U = tf.gather(this.userEmb, uIdx);  // [B,d]
-        const I = tf.gather(this.itemEmb, iIdx);  // [B,d]
-        const logits = tf.matMul(U, I, false, true);         // [B,B]
-        const labels = tf.eye(logits.shape[0]);              // one-hots (small B; OK)
-        const loss = tf.losses.softmaxCrossEntropy(labels, logits).mean();
-        return loss;
-      }, true).data().then(a=>a[0]);
-    }
-    scoreUserAgainstAll(uIdx1){
-      const U = tf.gather(this.userEmb, uIdx1);             // [1,d]
-      const scores = tf.matMul(U, this.itemEmb, false, true);// [1,ni]
-      return scores.squeeze();
+      this.userEmbedding.dispose();
+      this.itemEmbedding.dispose();
     }
   }
-  window.TwoTower = TwoTower;
-})();
+
+  global.TwoTowerModel = TwoTowerModel;
+})(window);
