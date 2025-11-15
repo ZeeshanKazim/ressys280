@@ -1,0 +1,37 @@
+:root{
+  --bg:#0b0f14; --panel:#111723; --card:#121a27; --muted:#9fb0c3;
+  --ink:#e7f0fb; --ink2:#cfe0f5; --btn:#22314a; --round:16px;
+  --good:#39d353; --warn:#ffd166; --bad:#ff6b6b; --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+.topbar{padding:20px 24px;border-bottom:1px solid #1b283a;background:linear-gradient(180deg,#0f1520,#0b0f14)}
+.topbar h1{margin:0 0 6px;font-weight:700;letter-spacing:.2px}
+.muted{color:var(--muted)}
+.wrap{max-width:1200px;margin:24px auto;padding:0 16px}
+.panel{background:var(--panel);border:1px solid #1b2a3b;border-radius:var(--round);padding:16px}
+.panel-controls .grid{display:grid;gap:12px;margin-bottom:10px}
+.grid-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+label{display:block;font-size:.85rem;margin-bottom:6px;color:var(--ink2)}
+input,select{width:100%;background:#0d141f;border:1px solid #1b2a3b;color:var(--ink);padding:10px;border-radius:10px;outline:none}
+input[type="range"]{padding:0}
+.controls-row{display:flex;gap:10px;align-items:center;margin-top:6px}
+button{background:var(--btn);border:1px solid #2a4163;color:var(--ink);padding:10px 14px;border-radius:10px;cursor:pointer}
+button[disabled]{opacity:.5;cursor:not-allowed}
+.tabs{margin-top:18px}
+.tabbar{display:flex;gap:8px;margin-bottom:8px}
+.tab{background:#0f1724;border:1px solid #1c2b40;padding:10px 12px;border-radius:10px;cursor:pointer}
+.tab.active{background:#16233a;border-color:#254267}
+.tabpane{display:none}
+.tabpane.active{display:block}
+.split{display:grid;grid-template-columns:1.1fr .9fr; gap:12px}
+.card{background:var(--card);border:1px solid #1b2a3b;border-radius:var(--round);padding:14px}
+.card h3{margin:0 0 10px}
+table{width:100%;border-collapse:collapse}
+thead th{position:sticky;top:0;background:#0f1724;border-bottom:1px solid #1c2b40;padding:8px;font-weight:600;text-align:left}
+tbody td{border-bottom:1px dashed #1b2a3b;padding:8px;vertical-align:top}
+.badge{display:inline-block;padding:.15rem .45rem;border-radius:999px;border:1px solid #2a4163;background:#0d141f;color:#cfe0f5;font-size:.75rem;margin-right:4px}
+.price{font-family:var(--mono)}
+.good{color:var(--good)} .warn{color:var(--warn)} .bad{color:var(--bad)}
+small{display:block;margin-top:4px}
+.foot{max-width:1200px;margin:18px auto;padding:0 16px}
