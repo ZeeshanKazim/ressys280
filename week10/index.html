@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Content-Based Movie Recommender</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="main-container">
+    <h1>Content-Based Movie Recommender</h1>
+
+    <p class="instructions">
+      This demo uses movie overviews and a 4-stage feature-engineering workflow
+      (simulating LLM-based sub-genres &amp; themes). Select a movie you like,
+      and we'll find similar ones for you!
+    </p>
+
+    <div class="controls">
+      <label for="movie-select" class="visually-hidden">Choose a movie</label>
+      <select id="movie-select">
+        <option value="">-- Loading movies... --</option>
+      </select>
+
+      <button id="recommend-button" onclick="getRecommendations()">
+        Get Recommendations
+      </button>
+    </div>
+
+    <div id="result-box">
+      <p id="result">Initializing, please wait...</p>
+    </div>
+  </main>
+
+  <!-- Data loading and feature-engineering (Stages 1–4) -->
+  <script src="data.js"></script>
+  <!-- UI + recommendation logic, built on top of movieFeatures -->
+  <script src="script.js"></script>
+</body>
+</html>
