@@ -1,171 +1,147 @@
 // ---------- Config ----------
-const MODEL_PATH = 'rps_web_model/model.json'; // relative to index.html
-const CLASS_NAMES = ['Rock', 'Paper', 'Scissors'];
-const CLASS_EMOJI = ['✊', '✋', '✌️'];
-const INPUT_SIZE = 224;
+const VIDEO = document.getElementById('cam');
+const STATUS = document.getElementById('statusText');
+const PRED = document.getElementById('predText');
+const BTN_SWITCH = document.getElementById('btnSwitch');
+const BTN_PAUSE = document.getElementById('btnPause');
+const BTN_RESUME = document.getElementById('btnResume');
+const MODEL_REL = 'rps_web_model/model.json';
 
-// ---------- UI refs ----------
-const videoEl   = document.getElementById('cam');
-const statusBox = document.getElementById('status');
-const stateIcon = document.getElementById('stateIcon');
-const stateMain = document.getElementById('stateMain');
-const stateSub  = document.getElementById('stateSub');
-const btnSwitch = document.getElementById('switchBtn');
-const btnPause  = document.getElementById('pauseBtn');
-const btnResume = document.getElementById('resumeBtn');
+// Classes and emojis (edit to match your model)
+const CLASSES = ['Rock', 'Paper', 'Scissors'];
+const EMOJI   = ['✊', '✋', '✌️'];
 
-// ---------- Globals ----------
 let model = null;
 let stream = null;
 let usingFront = true;
-let running = false;
+let running = true;
+
+// Cache buster so GitHub Pages never serves stale 404/old bin
+const BUST = `?v=${Date.now()}`;
 
 // ---------- Helpers ----------
-function setStatus(icon, main, sub='') {
-  stateIcon.textContent = icon;
-  stateMain.textContent = main;
-  stateSub.textContent  = sub;
-}
+const setStatus = (msg, cls) => {
+  STATUS.textContent = msg;
+  STATUS.parentElement.classList.toggle('ok', cls === 'ok');
+  STATUS.parentElement.classList.toggle('bad', cls === 'bad');
+};
 
+const setPred = (text) => { PRED.textContent = text; };
+
+// ---------- Camera ----------
 async function setupCamera() {
   if (stream) {
     stream.getTracks().forEach(t => t.stop());
-    stream = null;
   }
   const constraints = {
     audio: false,
     video: {
-      facingMode: usingFront ? 'user' : { exact: 'environment' },
+      facingMode: usingFront ? 'user' : 'environment',
       width: { ideal: 640 }, height: { ideal: 640 }
     }
   };
-  try {
-    stream = await navigator.mediaDevices.getUserMedia(constraints);
-  } catch (e) {
-    // fallback without exact environment requirement
-    if (!usingFront) {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
-    } else {
-      throw e;
-    }
-  }
-  videoEl.srcObject = stream;
-  await videoEl.play();
-  return true;
+  stream = await navigator.mediaDevices.getUserMedia(constraints);
+  VIDEO.srcObject = stream;
+  await VIDEO.play();
 }
 
-async function verifyModelUrl(url) {
-  try {
-    const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status} ${res.statusText}`);
-    }
-    // small sanity check: ensure weightsManifest mentions a .bin
-    const j = await res.clone().json();
-    const ok = Array.isArray(j.weightsManifest) &&
-               j.weightsManifest.length &&
-               j.weightsManifest[0].paths &&
-               j.weightsManifest[0].paths.length &&
-               /\.bin$/i.test(j.weightsManifest[0].paths[0]);
-    if (!ok) throw new Error('model.json looks invalid (no .bin path).');
-    return true;
-  } catch (err) {
-    console.error('Model URL check failed:', err);
-    setStatus('❌', 'Model file not reachable', `Path: ${url}\nDetails: ${err.message}`);
-    throw err;
-  }
-}
-
-async function loadModel(url) {
-  await verifyModelUrl(url);
-  setStatus('⏳', 'Loading model…', 'Fetching model.json and weight shard…');
-  model = await tf.loadLayersModel(url);
-  // warmup
-  tf.tidy(() => {
-    const warm = tf.zeros([1, INPUT_SIZE, INPUT_SIZE, 3]);
-    model.predict(warm);
+// ---------- Model loader with cache-busting ----------
+async function loadModel() {
+  setStatus('Fetching model.json and weight shard…');
+  // Use browserHTTPRequest so we can add a weightUrlConverter and no-store
+  const url = new URL(`./${MODEL_REL}${BUST}`, window.location.href).toString();
+  const ioHandler = tf.io.browserHTTPRequest(url, {
+    credentials: 'same-origin',
+    cache: 'no-store',
+    // Called for each weight file path inside model.json
+    weightUrlConverter: (w) => `${w}${BUST}`
   });
-  setStatus('✅', 'Model loaded', 'Show ✊, ✋, or ✌️ to start predictions.');
+  model = await tf.loadLayersModel(ioHandler);
+  setStatus('Model loaded ✓', 'ok');
+
+  // Sanity-check: if this isn't an image model, warn loudly
+  const ishape = model.inputs?.[0]?.shape; // e.g. [null, 224, 224, 3]
+  if (!(ishape && ishape.length === 4 && ishape[3] === 3)) {
+    setStatus(
+      `Loaded a non-image model (expects ${JSON.stringify(ishape)}). ` +
+      `This app needs an image CNN (e.g., [null,224,224,3]).`,
+      'bad'
+    );
+  }
 }
 
-function preprocessFrame() {
+// ---------- Prediction loop ----------
+function preprocessFromVideo(size) {
+  // Returns a 4D float32 tensor [1, size, size, 3]
   return tf.tidy(() => {
-    const frame = tf.browser.fromPixels(videoEl);
-    const resized = tf.image.resizeBilinear(frame, [INPUT_SIZE, INPUT_SIZE], true);
-    const norm = resized.toFloat().div(255);
-    return norm.expandDims(0); // [1,H,W,3]
+    let t = tf.browser.fromPixels(VIDEO);
+    t = tf.image.resizeBilinear(t, [size, size], true);
+    return t.expandDims(0).toFloat().div(255.0);
   });
 }
 
-function showPrediction(idx, prob) {
-  const emoji = CLASS_EMOJI[idx] || '❓';
-  const name  = CLASS_NAMES[idx] || 'Unknown';
-  setStatus(emoji, `${name}`, `Confidence: ${(prob*100).toFixed(1)}%`);
-}
+async function loop() {
+  if (!running || !model) { requestAnimationFrame(loop); return; }
 
-function loop() {
-  if (!running || !model) return;
   try {
-    const batched = preprocessFrame();
-    const logits = model.predict(batched);
-    const probs = logits.softmax ? logits.softmax() : logits; // if model ends with logits
-    const data = probs.dataSync(); // small vector of length 3
-    let bestI = 0, bestP = data[0];
-    for (let i = 1; i < data.length; i++) if (data[i] > bestP) { bestP = data[i]; bestI = i; }
-    showPrediction(bestI, bestP);
-    tf.dispose([batched, logits, probs]);
-  } catch (e) {
-    console.error('Predict error:', e);
-    setStatus('⚠️', 'Prediction error', e.message);
-    running = false;
-    return;
+    // Try to infer expected input size from model
+    const ishape = model.inputs?.[0]?.shape;
+    const size = Number(ishape?.[1]) || 224;
+
+    const input = preprocessFromVideo(size);
+    const probs = model.predict(input);
+    const data = (probs.arraySync && probs.arraySync()[0]) || (await probs.data());
+    tf.dispose([input, probs]);
+
+    if (!data || !data.length) {
+      setPred('—');
+    } else {
+      const argmax = data.indexOf(Math.max(...data));
+      setPred(`${EMOJI[argmax] || ''} ${CLASSES[argmax] || ''} (${(data[argmax]*100).toFixed(0)}%)`);
+    }
+  } catch (err) {
+    console.error(err);
+    setStatus(`Prediction error: ${err.message}`, 'bad');
+    setPred('—');
+    // Keep the loop alive so you can fix without reload
   }
+
   requestAnimationFrame(loop);
 }
 
-// ---------- Controls ----------
-btnSwitch.addEventListener('click', async () => {
+// ---------- UI ----------
+BTN_SWITCH.addEventListener('click', async () => {
   usingFront = !usingFront;
-  setStatus('📷', 'Switching camera…', usingFront ? 'Using front camera' : 'Using back camera');
-  await setupCamera();
+  try {
+    await setupCamera();
+  } catch (e) {
+    console.error(e);
+    setStatus('Camera error: ' + e.message, 'bad');
+  }
 });
-btnPause.addEventListener('click', () => {
-  running = false;
-  btnPause.disabled = true;
-  btnResume.disabled = false;
-  setStatus('⏸️', 'Paused', 'Click Resume to continue.');
-});
-btnResume.addEventListener('click', () => {
-  if (!model) return;
-  running = true;
-  btnPause.disabled = false;
-  btnResume.disabled = true;
-  loop();
-});
+BTN_PAUSE.addEventListener('click', () => { running = false; setStatus('Paused'); });
+BTN_RESUME.addEventListener('click', () => { running = true; setStatus('Model loaded ✓', 'ok'); });
 
 // ---------- Boot ----------
 (async function run() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    setStatus('This browser does not support camera access.', 'bad');
+    return;
+  }
   try {
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setStatus('❌', 'Camera API not available', 'Use a modern browser (Chrome, Edge, Safari).');
-      return;
-    }
     await setupCamera();
   } catch (e) {
-    console.error('Camera error:', e);
-    setStatus('❌', 'Could not start camera', e.message);
+    console.error(e);
+    setStatus('Camera permission denied. Allow camera and refresh.', 'bad');
     return;
   }
-
   try {
-    await loadModel(MODEL_PATH);
+    await loadModel();
   } catch (e) {
-    // loadModel already set UI + console, just stop here
+    console.error(e);
+    setStatus('Failed to load model. Check file path & names.', 'bad');
     return;
   }
-
-  running = true;
-  btnPause.disabled = false;
-  btnResume.disabled = true;
+  setStatus('Predicting…', 'ok');
   loop();
 })();
