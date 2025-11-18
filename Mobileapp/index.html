@@ -2,49 +2,59 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Rock, Paper, Scissors AI (TF.js)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
+  <title>Rock, Paper, Scissors AI</title>
+
+  <!-- TensorFlow.js -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+
   <style>
-    :root{--bg:#0c1220;--ink:#e8eef8;--muted:#a7b0c3;--card:#111a2d;--accent:#7ee787;}
-    *{box-sizing:border-box} body{margin:0;background:linear-gradient(180deg,#0a1020,#0b1226);color:var(--ink);font-family:Inter,system-ui,Segoe UI,Roboto,sans-serif}
-    .wrap{max-width:760px;margin:28px auto;padding:0 16px}
-    h1{font-size:1.2rem;font-weight:600;margin:0 0 14px;color:#cfe3ff}
-    .card{background:var(--card);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:14px;margin-bottom:14px}
-    .stage{display:flex;flex-direction:column;align-items:center;gap:12px}
-    video{width:100%;max-width:520px;aspect-ratio:1/1;object-fit:cover;border-radius:18px;border:1px solid rgba(255,255,255,.08)}
-    .status{display:flex;align-items:center;gap:10px;justify-content:center;padding:12px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);min-height:58px}
-    .emoji{font-size:1.8rem}
-    .pred{font-size:1.1rem;color:var(--muted)}
-    .big{font-size:1.6rem;color:var(--ink)}
-    .row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
-    button{background:#152241;color:var(--ink);border:1px solid rgba(255,255,255,.16);padding:9px 12px;border-radius:10px;cursor:pointer}
-    .foot{color:var(--muted);font-size:.9rem;margin-top:6px;text-align:center}
-    a{color:#9dd2ff}
+    :root{--bg:#0d1117;--ink:#e6edf3;--muted:#a3b1c6;--card:#161b22;--accent:#7ee787;}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,sans-serif}
+    .wrap{max-width:820px;margin:24px auto;padding:0 16px}
+    h1{font-size:1.25rem;margin:8px 0 16px;color:#b9c6d8}
+    .panel{background:var(--card);border:1px solid #263041;border-radius:14px;padding:16px}
+    .video-wrap{display:flex;justify-content:center}
+    video{width:100%;max-width:720px;aspect-ratio:1/1;object-fit:cover;border-radius:12px;border:1px solid #2a3546}
+    .status{margin-top:14px;display:flex;align-items:center;gap:.6rem;background:#0f1420;border:1px solid #263041;border-radius:12px;padding:12px}
+    .status b{color:#ffd369}
+    .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    button{background:#1f2634;color:var(--ink);border:1px solid #2b3750;padding:10px 12px;border-radius:10px;cursor:pointer}
+    button:hover{border-color:#3f5b86}
+    .pred{font-size:1.4rem;margin-left:auto}
+    .muted{color:var(--muted)}
+    .ok{color:var(--accent);font-weight:700}
+    .bad{color:#ff7b7b;font-weight:700}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="card">
-      <h1>Real-time gesture classification in your browser with TensorFlow.js.</h1>
-      <div class="stage">
+    <h1>Real-time gesture classification in your browser with TensorFlow.js.</h1>
+
+    <div class="panel">
+      <div class="video-wrap">
         <video id="cam" autoplay muted playsinline></video>
-        <div id="status" class="status">
-          <span class="emoji" id="stateIcon">⏳</span>
-          <div>
-            <div class="big" id="stateMain">Loading model…</div>
-            <div class="pred" id="stateSub">If this takes more than a few seconds, open DevTools → Console for details.</div>
-          </div>
-        </div>
-        <div class="row">
-          <button id="switchBtn">Switch camera</button>
-          <button id="pauseBtn">Pause</button>
-          <button id="resumeBtn" disabled>Resume</button>
-        </div>
-        <div class="foot">Tip: show ✊, ✋, or ✌️ to the camera.</div>
       </div>
+
+      <div class="status" id="status">
+        ⏳ <span id="statusText">Loading model…</span>
+        <span class="pred" id="predText" aria-live="polite">—</span>
+      </div>
+
+      <div class="row">
+        <button id="btnSwitch">Switch camera</button>
+        <button id="btnPause">Pause</button>
+        <button id="btnResume">Resume</button>
+        <a id="openModel" href="rps_web_model/model.json" target="_blank" class="muted" style="margin-left:auto;text-decoration:none;">Open model.json</a>
+      </div>
+
+      <p class="muted" style="margin-top:10px">
+        Tip: show ✊, ✋, or ✌️ to the camera.
+      </p>
     </div>
   </div>
-  <script defer src="./app.js"></script>
+
+  <script defer src="app.js"></script>
 </body>
 </html>
