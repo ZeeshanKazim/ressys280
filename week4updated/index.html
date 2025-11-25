@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>RAG + Two-Tower Movie Recommender (MovieLens 100K)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+        :root {
+            color-scheme: light dark;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #f4f6fb;
+            color: #111827;
+        }
+
+        .container {
+            max-width: 1220px;
+            margin: 20px auto 40px auto;
+            padding: 20px 24px 32px 24px;
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+        }
+
+        h1 {
+            margin-top: 0;
+            margin-bottom: 4px;
+            font-size: 26px;
+            letter-spacing: 0.01em;
+        }
+
+        .subtitle {
+            margin: 0 0 12px 0;
+            color: #4b5563;
+            font-size: 14px;
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 16px 0 10px 0;
+        }
+
+        button {
+            border-radius: 999px;
+            border: none;
+            padding: 9px 16px;
+            font-size: 14px;
+            cursor: pointer;
+            font-weight: 500;
+            background: #2563eb;
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+            transition: transform 0.08s ease-out, box-shadow 0.08s ease-out, background 0.15s ease-out;
+        }
+
+        button.secondary {
+            background: #6b7280;
+            box-shadow: 0 4px 10px rgba(55, 65, 81, 0.3);
+        }
+
+        button:hover:not(:disabled) {
+            background: #1d4ed8;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(37, 99, 235, 0.45);
+        }
+
+        button.secondary:hover:not(:disabled) {
+            background: #4b5563;
+        }
+
+        button:active:not(:disabled) {
+            transform: translateY(0);
+            box-shadow: 0 3px 8px rgba(37, 99, 235, 0.35);
+        }
+
+        button:disabled {
+            opacity: 0.45;
+            cursor: default;
+            box-shadow: none;
+        }
+
+        .status {
+            margin: 8px 0 14px 0;
+            padding: 9px 11px;
+            border-radius: 8px;
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            font-size: 13px;
+            color: #1e3a8a;
+            white-space: pre-wrap;
+        }
+
+        .chart-container {
+            margin: 18px 0;
+        }
+
+        .chart-container h2 {
+            margin: 0 0 4px 0;
+            font-size: 18px;
+        }
+
+        .hint {
+            margin: 0 0 6px 0;
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            max-width: 100%;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background: #ffffff;
+        }
+
+        .query-row {
+            margin-top: 10px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            background: #f9fafb;
+            border: 1px dashed #e5e7eb;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .query-row label {
+            font-size: 13px;
+            font-weight: 600;
+            margin-right: 4px;
+        }
+
+        .query-row input[type="text"] {
+            flex: 1 1 260px;
+            min-width: 0;
+            padding: 8px 11px;
+            border-radius: 999px;
+            border: 1px solid #d1d5db;
+            font-size: 13px;
+            outline: none;
+        }
+
+        .query-row input[type="text"]:focus {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.2);
+        }
+
+        .query-hint {
+            flex-basis: 100%;
+            font-size: 11px;
+            color: #6b7280;
+        }
+
+        .results {
+            margin-top: 24px;
+        }
+
+        .results h2 {
+            font-size: 20px;
+            margin-bottom: 8px;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 8px 0;
+            font-size: 13px;
+        }
+
+        th,
+        td {
+            border: 1px solid #e5e7eb;
+            padding: 6px 8px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f3f4f6;
+            font-weight: 600;
+        }
+
+        .side-by-side {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 18px;
+        }
+
+        .side-by-side > div {
+            flex: 1 1 0;
+            min-width: 260px;
+        }
+
+        .metrics {
+            margin-top: 22px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            font-size: 13px;
+        }
+
+        .metrics h2 {
+            margin: 0 0 6px 0;
+            font-size: 16px;
+        }
+
+        .metrics ul {
+            margin: 4px 0 0 18px;
+            padding: 0;
+        }
+
+        .metrics li {
+            margin-bottom: 4px;
+        }
+
+        .tips {
+            margin-top: 26px;
+            padding-top: 12px;
+            border-top: 1px dashed #e5e7eb;
+            font-size: 13px;
+        }
+
+        .tips h2 {
+            margin: 0 0 6px 0;
+            font-size: 15px;
+        }
+
+        .tips ul {
+            margin: 4px 0 0 18px;
+            padding: 0;
+        }
+
+        .tips li {
+            margin-bottom: 4px;
+        }
+
+        code {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+                "Courier New", monospace;
+            font-size: 12px;
+            background: #f9fafb;
+            padding: 1px 3px;
+            border-radius: 4px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                padding: 16px;
+            }
+
+            h1 {
+                font-size: 22px;
+            }
+
+            .controls {
+                gap: 6px;
+            }
+
+            .query-row {
+                padding: 8px 9px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>RAG + Two-Tower Movie Recommender</h1>
+        <p class="subtitle">
+            MovieLens 100K • TensorFlow.js in-browser demo • Retrieval-Augmented Generation + Two-Tower CF.
+        </p>
+
+        <div class="controls">
+            <button id="loadData">Load Data</button>
+            <button id="train" disabled>Train Two-Tower</button>
+            <button id="test" disabled>Test Random User</button>
+            <button id="evaluate" class="secondary" disabled>Eval@5</button>
+        </div>
+
+        <div class="query-row">
+            <label for="queryText">RAG Text Query</label>
+            <input
+                id="queryText"
+                type="text"
+                placeholder='e.g. "dark philosophical sci-fi, no ghosts"'
+            />
+            <button id="querySearch" class="secondary" disabled>Search (Text → Vector)</button>
+            <div class="query-hint">
+                Stage 1 (RAG): your text is turned into a vector and matched with movie-title vectors using cosine
+                similarity. If you have trained the Two-Tower model and clicked “Test”, the same user is used to
+                re-rank text results (hybrid scoring).
+            </div>
+        </div>
+
+        <div id="status" class="status">Click “Load Data” to start.</div>
+
+        <div class="chart-container">
+            <h2>Training Loss</h2>
+            <p class="hint">Two-Tower retrieval model with in-batch negatives. Loss should trend down over epochs.</p>
+            <canvas id="lossChart" width="900" height="260"></canvas>
+        </div>
+
+        <div class="chart-container">
+            <h2>Item Embeddings Projection (PCA)</h2>
+            <p class="hint">
+                PCA over learned item embeddings (Two-Tower item tower). Hover over points to see movie titles.
+            </p>
+            <canvas id="embeddingChart" width="900" height="520"></canvas>
+        </div>
+
+        <div id="results" class="results"></div>
+
+        <div id="ragResults" class="results"></div>
+
+        <div id="metrics" class="metrics" style="display:none;"></div>
+
+        <div class="tips">
+            <h2>How this demo matches the lecture</h2>
+            <ul>
+                <li>
+                    <strong>Stage 1 – RAG (Vector Search):</strong> movie titles are converted to sparse vectors
+                    (token-level bag-of-words). Your text query is encoded with the same encoder and we run cosine
+                    similarity to retrieve candidates.
+                </li>
+                <li>
+                    <strong>Stage 3 – Two-Tower CF:</strong> a classic user–item two-tower model (ID → embedding) is
+                    trained on MovieLens 100K interactions using in-batch sampled softmax.
+                </li>
+                <li>
+                    <strong>Hybrid Scoring:</strong> if you have trained the model and run “Test”, text candidates are
+                    re-ranked with a weighted combination of text similarity and collaborative-score from the
+                    Two-Tower user tower.
+                </li>
+                <li>
+                    <strong>Evaluation:</strong> “Eval@5” computes Precision@5, Recall@5, and NDCG@5 over a subset of
+                    users with many ratings.
+                </li>
+                <li>
+                    GitHub Pages layout: keep <code>index.html</code>, <code>app.js</code>,
+                    <code>two-tower.js</code> at the root and MovieLens files at <code>data/u.data</code> and
+                    <code>data/u.item</code>. If you open from disk, use a local server
+                    (<code>python -m http.server</code>) to avoid <code>fetch()</code> issues.
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- TensorFlow.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.15.0/dist/tf.min.js"></script>
+
+    <!-- Two-Tower model definition -->
+    <script src="two-tower.js"></script>
+
+    <!-- App wiring, RAG, evaluation, and UI logic -->
+    <script src="app.js"></script>
+</body>
+</html>
