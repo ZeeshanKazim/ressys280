@@ -1,55 +1,37 @@
 // app.js
-// MovieLens 100K Two-Tower + RAG-style demo (pure browser, TensorFlow.js)
-//
-// Features:
-//  - Load MovieLens 100K (u.data, u.item)
-//  - Build user/item indexers
-//  - Train a Two-Tower model with in-batch softmax or BPR loss
-//  - Live loss chart on canvas
-//  - PCA projection of item embeddings
-//  - Test mode: show historical top-10 vs top-10 recommended
-//  - Offline eval for sampled user: Precision@5, Recall@5, NDCG@5
-//  - Text query mode (RAG-style): vector-search over titles, then re-rank with Two-Tower
-//
-// NOTE: index.html must include:
-//   - Buttons: #loadData, #train, #test
-//   - Canvases: #lossChart, #embeddingChart
-//   - Divs: #status, #results
-//   - (Optional) elements for query mode:
-//       input#queryText, input#queryUserId, button#querySearch, div#queryResults
+// MovieLens 100K Two-Tower + RAG-style text query demo (pure browser, TensorFlow.js)
 
 class MovieLensApp {
     constructor() {
-        // Raw parsed data
-        this.interactions = []; // full interactions used for splitting
-        this.items = new Map(); // itemId -> { title, year }
+        // Raw data
+        this.interactions = [];
+        this.items = new Map(); // itemId -> {title, year}
 
         // Train / eval split
-        this.trainInteractions = []; // subset of interactions used for training
-        this.testItemsByUser = new Map(); // userId -> [itemId,...] hold-out positives for metrics
+        this.trainInteractions = [];
+        this.testItemsByUser = new Map(); // userId -> [itemId,...]
 
-        // ID <-> index mappings
-        this.userMap = new Map(); // raw userId -> 0..numUsers-1
-        this.itemMap = new Map(); // raw itemId -> 0..numItems-1
-        this.reverseUserMap = new Map(); // index -> raw userId
-        this.reverseItemMap = new Map(); // index -> raw itemId
+        // ID mappings
+        this.userMap = new Map();
+        this.itemMap = new Map();
+        this.reverseUserMap = new Map();
+        this.reverseItemMap = new Map();
 
-        // For displaying user history
-        this.userTopRated = new Map(); // userId -> [interactions sorted by rating+time]
-        this.qualifiedUsers = []; // userIds with >= minHistory interactions
+        // Per-user info
+        this.userTopRated = new Map(); // userId -> [interactions sorted]
+        this.qualifiedUsers = []; // users with enough history
 
-        // Evaluation / query helpers
-        this.titleTokensByItem = new Map(); // itemId -> [token, ...] for simple text retrieval
+        // Simple text features (tokenized titles)
+        this.titleTokensByItem = new Map();
 
-        // Model & training state
+        // Model and training state
         this.model = null;
         this.lossHistory = [];
         this.isTraining = false;
 
-        // Embedding visualization state
-        this.embeddingPoints = []; // [{x,y,title,year}, ...]
+        // Embedding visualization points
+        this.embeddingPoints = [];
 
-        // Hyperparameters / config
         this.config = {
             maxInteractions: 80000,
             embeddingDim: 32,
@@ -59,42 +41,31 @@ class MovieLensApp {
             lossType: 'softmax', // 'softmax' or 'bpr'
             minRatingsForQualifiedUser: 20,
             numTestPerUser: 3,
-            minRatingForPositive: 4.0, // used when selecting test positives
-            metricsK: 5 // K for Precision@K, Recall@K, NDCG@K
+            minRatingForPositive: 4.0,
+            metricsK: 5
         };
 
         this.initializeUI();
     }
 
     // ---------------------------------------------------------------------
-    // UI wiring
+    // UI
     // ---------------------------------------------------------------------
 
     initializeUI() {
         const loadBtn = document.getElementById('loadData');
         const trainBtn = document.getElementById('train');
         const testBtn = document.getElementById('test');
-
-        if (loadBtn) {
-            loadBtn.addEventListener('click', () => this.loadData());
-        }
-        if (trainBtn) {
-            trainBtn.addEventListener('click', () => this.train());
-        }
-        if (testBtn) {
-            testBtn.addEventListener('click', () => this.test());
-        }
-
-        // Optional: RAG-style query recommend
         const queryBtn = document.getElementById('querySearch');
-        if (queryBtn) {
-            queryBtn.addEventListener('click', () => this.handleQueryRecommend());
-        }
-
         const embeddingCanvas = document.getElementById('embeddingChart');
+
+        if (loadBtn) loadBtn.addEventListener('click', () => this.loadData());
+        if (trainBtn) trainBtn.addEventListener('click', () => this.train());
+        if (testBtn) testBtn.addEventListener('click', () => this.test());
+        if (queryBtn) queryBtn.addEventListener('click', () => this.handleQueryRecommend());
         if (embeddingCanvas) {
-            embeddingCanvas.addEventListener('mousemove', (event) =>
-                this.handleEmbeddingHover(event)
+            embeddingCanvas.addEventListener('mousemove', (e) =>
+                this.handleEmbeddingHover(e)
             );
         }
 
@@ -103,9 +74,7 @@ class MovieLensApp {
 
     updateStatus(message) {
         const statusDiv = document.getElementById('status');
-        if (statusDiv) {
-            statusDiv.textContent = message;
-        }
+        if (statusDiv) statusDiv.textContent = message;
     }
 
     // ---------------------------------------------------------------------
@@ -122,7 +91,7 @@ class MovieLensApp {
 
         this.updateStatus('Loading MovieLens 100K from ./data ...');
 
-        // Reset state in case of re-load
+        // Reset state
         this.interactions = [];
         this.items.clear();
         this.trainInteractions = [];
@@ -142,18 +111,12 @@ class MovieLensApp {
         const embeddingCanvas = document.getElementById('embeddingChart');
         if (embeddingCanvas) {
             const ctx = embeddingCanvas.getContext('2d');
-            if (ctx) {
-                ctx.clearRect(0, 0, embeddingCanvas.width, embeddingCanvas.height);
-            }
+            if (ctx) ctx.clearRect(0, 0, embeddingCanvas.width, embeddingCanvas.height);
         }
         const resultsDiv = document.getElementById('results');
-        if (resultsDiv) {
-            resultsDiv.innerHTML = '';
-        }
+        if (resultsDiv) resultsDiv.innerHTML = '';
         const queryResultsDiv = document.getElementById('queryResults');
-        if (queryResultsDiv) {
-            queryResultsDiv.innerHTML = '';
-        }
+        if (queryResultsDiv) queryResultsDiv.innerHTML = '';
 
         try {
             const [interResp, itemResp] = await Promise.all([
@@ -168,7 +131,7 @@ class MovieLensApp {
                 throw new Error(`Failed to load data/u.item (status ${itemResp.status})`);
             }
 
-            // Parse interactions
+            // Parse u.data
             const interText = await interResp.text();
             const interLines = interText.trim().split(/\r?\n/);
 
@@ -193,17 +156,15 @@ class MovieLensApp {
                 })
                 .filter((x) => x !== null);
 
-            // Parse items
+            // Parse u.item
             const itemText = await itemResp.text();
             const itemLines = itemText.trim().split(/\r?\n/);
-
             itemLines.forEach((line) => {
                 const parts = line.split('|');
                 if (parts.length < 2) return;
                 const itemId = parseInt(parts[0], 10);
                 if (Number.isNaN(itemId)) return;
                 const rawTitle = parts[1];
-
                 const yearMatch = rawTitle.match(/\((\d{4})\)\s*$/);
                 const year = yearMatch ? parseInt(yearMatch[1], 10) : null;
                 const cleanTitle = rawTitle.replace(/\(\d{4}\)\s*$/, '').trim();
@@ -212,7 +173,6 @@ class MovieLensApp {
                 this.titleTokensByItem.set(itemId, this.tokenizeTitle(cleanTitle));
             });
 
-            // Build indexers and train/test split
             this.createMappingsAndSplit();
             this.findQualifiedUsers();
 
@@ -227,25 +187,21 @@ class MovieLensApp {
             console.error(err);
             this.updateStatus(
                 `Error loading data: ${err.message}\n` +
-                    'If you opened index.html from disk, start a local HTTP server or use GitHub Pages.'
+                    'If you opened index.html from disk, use a simple HTTP server or GitHub Pages.'
             );
         }
     }
 
     tokenizeTitle(title) {
-        // Very lightweight tokenization for text retrieval over titles
         const text = title.toLowerCase();
-        // Remove simple punctuation
         const cleaned = text.replace(/[^a-z0-9\s]/g, ' ');
-        const tokens = cleaned
+        return cleaned
             .split(/\s+/)
             .map((t) => t.trim())
-            .filter((t) => t.length > 1); // ignore single-letter tokens
-        return tokens;
+            .filter((t) => t.length > 1);
     }
 
     createMappingsAndSplit() {
-        // ---- Create dense indices ----
         const userSet = new Set();
         const itemSet = new Set();
         this.interactions.forEach((i) => {
@@ -254,28 +210,25 @@ class MovieLensApp {
         });
 
         let idx = 0;
-        userSet.forEach((userId) => {
-            this.userMap.set(userId, idx);
-            this.reverseUserMap.set(idx, userId);
+        userSet.forEach((u) => {
+            this.userMap.set(u, idx);
+            this.reverseUserMap.set(idx, u);
             idx += 1;
         });
 
         idx = 0;
-        itemSet.forEach((itemId) => {
-            this.itemMap.set(itemId, idx);
-            this.reverseItemMap.set(idx, itemId);
+        itemSet.forEach((it) => {
+            this.itemMap.set(it, idx);
+            this.reverseItemMap.set(idx, it);
             idx += 1;
         });
 
-        // ---- Per-user grouping ----
-        const byUser = new Map(); // userId -> [interactions]
+        const byUser = new Map();
         this.interactions.forEach((inter) => {
-            const u = inter.userId;
-            if (!byUser.has(u)) byUser.set(u, []);
-            byUser.get(u).push(inter);
+            if (!byUser.has(inter.userId)) byUser.set(inter.userId, []);
+            byUser.get(inter.userId).push(inter);
         });
 
-        // ---- Train / test split + top-rated ----
         this.trainInteractions = [];
         this.testItemsByUser.clear();
         this.userTopRated.clear();
@@ -284,7 +237,6 @@ class MovieLensApp {
         const numTestPerUser = this.config.numTestPerUser;
 
         byUser.forEach((list, userId) => {
-            // Chronological sort for splitting
             const byTime = list.slice().sort((a, b) => a.timestamp - b.timestamp);
             const testCandidates = byTime.filter((i) => i.rating >= minRating);
             const testSlice =
@@ -295,14 +247,10 @@ class MovieLensApp {
             const testIds = new Set(testSlice.map((i) => i.itemId));
             this.testItemsByUser.set(userId, Array.from(testIds));
 
-            // Train interactions = all minus selected test ones
             byTime.forEach((i) => {
-                if (!testIds.has(i.itemId)) {
-                    this.trainInteractions.push(i);
-                }
+                if (!testIds.has(i.itemId)) this.trainInteractions.push(i);
             });
 
-            // For UI historical view: sort by rating desc, then recency desc
             const topSorted = list
                 .slice()
                 .sort((a, b) => (b.rating !== a.rating ? b.rating - a.rating : b.timestamp - a.timestamp));
@@ -313,11 +261,8 @@ class MovieLensApp {
     findQualifiedUsers() {
         this.qualifiedUsers = [];
         const minRatings = this.config.minRatingsForQualifiedUser;
-
         this.userTopRated.forEach((list, userId) => {
-            if (list.length >= minRatings) {
-                this.qualifiedUsers.push(userId);
-            }
+            if (list.length >= minRatings) this.qualifiedUsers.push(userId);
         });
     }
 
@@ -382,7 +327,7 @@ class MovieLensApp {
                     );
                 }
 
-                // yield to browser so UI remains responsive
+                // yield to UI
                 // eslint-disable-next-line no-await-in-loop
                 await new Promise((resolve) => setTimeout(resolve, 0));
             }
@@ -400,7 +345,7 @@ class MovieLensApp {
         this.updateStatus('Training completed ✅ – computing embedding PCA projection...');
         await this.visualizeEmbeddings();
         this.updateStatus(
-            'Training completed ✅ – click "Test" to see recommendations or run a text query.'
+            'Training completed ✅ – click "Test" to see recommendations or run a RAG text query.'
         );
     }
 
@@ -430,7 +375,6 @@ class MovieLensApp {
         ctx.save();
         ctx.translate(margin, margin);
 
-        // axes
         ctx.strokeStyle = '#e5e7eb';
         ctx.lineWidth = 1;
         ctx.beginPath();
@@ -439,7 +383,6 @@ class MovieLensApp {
         ctx.lineTo(width, height);
         ctx.stroke();
 
-        // line
         ctx.beginPath();
         this.lossHistory.forEach((loss, idx) => {
             const x = (idx / Math.max(1, this.lossHistory.length - 1)) * width;
@@ -451,7 +394,6 @@ class MovieLensApp {
         ctx.lineWidth = 2;
         ctx.stroke();
 
-        // labels
         ctx.fillStyle = '#6b7280';
         ctx.font = '11px Arial';
         ctx.fillText(`min: ${minLoss.toFixed(4)}`, 4, 12);
@@ -462,7 +404,7 @@ class MovieLensApp {
     }
 
     // ---------------------------------------------------------------------
-    // Embedding visualization (PCA on items)
+    // Embedding visualization (PCA)
     // ---------------------------------------------------------------------
 
     async visualizeEmbeddings() {
@@ -476,7 +418,7 @@ class MovieLensApp {
         this.embeddingPoints = [];
 
         try {
-            const embTensor = this.model.getItemEmbeddings(); // [numItems, dim]
+            const embTensor = this.model.getItemEmbeddings();
             const allEmb = embTensor.arraySync();
             const totalItems = allEmb.length;
             if (!totalItems) return;
@@ -487,8 +429,7 @@ class MovieLensApp {
                 sampleIdx.push(Math.floor((i * totalItems) / sampleSize));
             }
             const sampleEmb = sampleIdx.map((i) => allEmb[i]);
-
-            const projected = this.computePCA(sampleEmb, 2); // [[x,y],...]
+            const projected = this.computePCA(sampleEmb, 2);
 
             const xs = projected.map((p) => p[0]);
             const ys = projected.map((p) => p[1]);
@@ -539,7 +480,10 @@ class MovieLensApp {
 
                 const itemIndex = sampleIdx[i];
                 const itemId = this.reverseItemMap.get(itemIndex);
-                const meta = this.items.get(itemId) || { title: `Item ${itemId}`, year: null };
+                const meta = this.items.get(itemId) || {
+                    title: `Item ${itemId}`,
+                    year: null
+                };
 
                 ctx.beginPath();
                 ctx.arc(x, y, 3, 0, Math.PI * 2);
@@ -609,7 +553,6 @@ class MovieLensApp {
             }
             components.push(v);
 
-            // deflate covariance
             for (let i = 0; i < dim; i++) {
                 for (let j = 0; j < dim; j++) {
                     cov[i][j] -= v[i] * v[j];
@@ -657,7 +600,7 @@ class MovieLensApp {
     }
 
     // ---------------------------------------------------------------------
-    // Testing: historical vs recommended + metrics
+    // Test user: historical vs recommendations + metrics
     // ---------------------------------------------------------------------
 
     async test() {
@@ -667,15 +610,13 @@ class MovieLensApp {
         }
         if (!this.qualifiedUsers.length) {
             this.updateStatus(
-                'No qualified users with enough history. Check data load / split configuration.'
+                'No qualified users with enough history. Check data loading / split.'
             );
             return;
         }
 
         this.updateStatus(
-            'Sampling a user with ≥ ' +
-                this.config.minRatingsForQualifiedUser +
-                ' ratings and generating recommendations...'
+            `Sampling a user with ≥ ${this.config.minRatingsForQualifiedUser} ratings...`
         );
 
         try {
@@ -685,9 +626,8 @@ class MovieLensApp {
             const userIndex = this.userMap.get(userId);
 
             const userEmb = this.model.getUserEmbedding(userIndex);
-            const scores = this.model.getScoresForAllItems(userEmb); // Float32Array
+            const scores = this.model.getScoresForAllItems(userEmb);
 
-            // UI recommendations: exclude items user has already rated (history)
             const ratedItemIds = new Set(userInteractions.map((i) => i.itemId));
             const candidateScores = [];
             for (let itemIndex = 0; itemIndex < scores.length; itemIndex++) {
@@ -703,9 +643,7 @@ class MovieLensApp {
             candidateScores.sort((a, b) => b.score - a.score);
             const topRecommendations = candidateScores.slice(0, 10);
 
-            // Offline eval for this user (Precision@K, Recall@K, NDCG@K)
             const metrics = this.computeRankingMetricsForUser(userId, scores);
-
             this.displayResults(userId, userInteractions, topRecommendations, metrics);
             this.updateStatus('Recommendations and metrics generated – scroll down to inspect.');
         } catch (err) {
@@ -718,16 +656,10 @@ class MovieLensApp {
         const K = this.config.metricsK;
         const testItems = this.testItemsByUser.get(userId) || [];
         if (!testItems.length) {
-            return {
-                precision: 0,
-                recall: 0,
-                ndcg: 0,
-                hasEval: false
-            };
+            return { precision: 0, recall: 0, ndcg: 0, hasEval: false };
         }
         const relevant = new Set(testItems);
 
-        // Sort all items by predicted score
         const indices = [];
         for (let i = 0; i < scoresArray.length; i++) indices.push(i);
         indices.sort((a, b) => scoresArray[b] - scoresArray[a]);
@@ -735,7 +667,6 @@ class MovieLensApp {
         const topKIndices = indices.slice(0, K);
         const topKItemIds = topKIndices.map((idx) => this.reverseItemMap.get(idx));
 
-        // Precision & Recall
         let hits = 0;
         const relFlags = [];
         topKItemIds.forEach((itemId) => {
@@ -747,12 +678,10 @@ class MovieLensApp {
         const precision = hits / K;
         const recall = hits / relevant.size;
 
-        // NDCG@K (binary relevance)
         let dcg = 0;
         for (let i = 0; i < relFlags.length; i++) {
             if (relFlags[i] === 1) {
-                const denom = Math.log2(i + 2); // position i => log2(i+2)
-                dcg += 1 / denom;
+                dcg += 1 / Math.log2(i + 2);
             }
         }
 
@@ -763,12 +692,7 @@ class MovieLensApp {
         }
         const ndcg = idcg > 0 ? dcg / idcg : 0;
 
-        return {
-            precision,
-            recall,
-            ndcg,
-            hasEval: true
-        };
+        return { precision, recall, ndcg, hasEval: true };
     }
 
     displayResults(userId, userInteractions, recommendations, metrics) {
@@ -776,23 +700,24 @@ class MovieLensApp {
         if (!resultsDiv) return;
 
         const topRated = userInteractions.slice(0, 10);
-
         let html = `
             <h2>Recommendations for User ${userId}</h2>
             <p style="font-size:13px; color:#4b5563;">
-                Offline evaluation on this user's held-out positives (K=${this.config.metricsK}):
         `;
 
         if (metrics && metrics.hasEval) {
             html += `
+                Offline eval on held-out positives (K=${this.config.metricsK}): 
                 Precision@${this.config.metricsK}: <strong>${metrics.precision.toFixed(
                 3
-            )}</strong>,
-                Recall@${this.config.metricsK}: <strong>${metrics.recall.toFixed(3)}</strong>,
+            )}</strong>, 
+                Recall@${this.config.metricsK}: <strong>${metrics.recall.toFixed(
+                3
+            )}</strong>, 
                 NDCG@${this.config.metricsK}: <strong>${metrics.ndcg.toFixed(3)}</strong>
             `;
         } else {
-            html += 'Not enough held-out interactions to compute metrics.';
+            html += 'Not enough held-out data for metrics.';
         }
         html += '</p>';
 
@@ -820,7 +745,7 @@ class MovieLensApp {
             html += `
                 <tr>
                     <td>${idx + 1}</td>
-                    <td>${meta.title}</td>
+                    <td>${this.escapeHtml(meta.title)}</td>
                     <td>${inter.rating.toFixed(1)}</td>
                     <td>${meta.year != null ? meta.year : 'N/A'}</td>
                 </tr>
@@ -853,7 +778,7 @@ class MovieLensApp {
             html += `
                 <tr>
                     <td>${idx + 1}</td>
-                    <td>${meta.title}</td>
+                    <td>${this.escapeHtml(meta.title)}</td>
                     <td>${rec.score.toFixed(4)}</td>
                     <td>${meta.year != null ? meta.year : 'N/A'}</td>
                 </tr>
@@ -871,7 +796,7 @@ class MovieLensApp {
     }
 
     // ---------------------------------------------------------------------
-    // Simple RAG-style query: text -> title similarity -> Two-Tower re-rank
+    // RAG-style text query: text → title tokens → Two-Tower re-rank
     // ---------------------------------------------------------------------
 
     handleQueryRecommend() {
@@ -884,14 +809,14 @@ class MovieLensApp {
         const userIdInput = document.getElementById('queryUserId');
         if (!queryInput) {
             this.updateStatus(
-                'Query input (#queryText) not found. Add it to index.html to use text queries.'
+                'Query input (#queryText) not found. Check index.html RAG section.'
             );
             return;
         }
 
         const rawQuery = queryInput.value.trim();
         if (!rawQuery) {
-            this.updateStatus('Enter a natural-language query (e.g., "dark sci-fi with AI").');
+            this.updateStatus('Enter a natural-language query (e.g., "dark sci-fi, no ghosts").');
             return;
         }
 
@@ -903,7 +828,6 @@ class MovieLensApp {
             }
         }
 
-        // If user id not specified or invalid, fall back to random qualified user
         if (userId == null) {
             if (!this.qualifiedUsers.length) {
                 this.updateStatus(
@@ -925,14 +849,14 @@ class MovieLensApp {
             return;
         }
 
-        const queryTokens = this.tokenizeTitle(queryText); // reuse title tokenizer
+        const queryTokens = this.tokenizeTitle(queryText);
         if (!queryTokens.length) {
             this.updateStatus('Query is too short – please describe the movie you want.');
             return;
         }
 
-        // Stage 1: simple text-based retrieval over titles (vector search proxy)
-        const textScores = []; // {itemId, textScore}
+        // Stage 1: text retrieval over titles (simple cosine over token sets)
+        const textScores = [];
         const querySet = new Set(queryTokens);
 
         this.items.forEach((meta, itemId) => {
@@ -945,7 +869,7 @@ class MovieLensApp {
             });
             if (overlap === 0) return;
             const norm = Math.sqrt(querySet.size * titleSet.size) || 1;
-            const score = overlap / norm; // cosine-like
+            const score = overlap / norm;
             textScores.push({ itemId, textScore: score });
         });
 
@@ -960,13 +884,12 @@ class MovieLensApp {
         const candidateCount = Math.min(100, textScores.length);
         const candidates = textScores.slice(0, candidateCount);
 
-        // Stage 2: Two-Tower ranking using user embedding
+        // Stage 2: Two-Tower re-ranking for the user
         const userEmb = this.model.getUserEmbedding(userIndex);
         const allScoresArr = this.model.getScoresForAllItems(userEmb);
 
-        // Combine text and collaborative signal
         const alpha = 0.4; // weight for text similarity
-        const beta = 0.6; // weight for two-tower score
+        const beta = 0.6; // weight for collaborative score
         const combined = candidates.map((c) => {
             const itemIndex = this.itemMap.get(c.itemId);
             const modelScore =
@@ -996,7 +919,7 @@ class MovieLensApp {
             <h2>Query-based Recommendations</h2>
             <p style="font-size:13px; color:#4b5563;">
                 Query: <strong>${this.escapeHtml(queryText)}</strong><br/>
-                Re-ranked for user <strong>${userId}</strong> (Two-Tower).
+                Re-ranked for user <strong>${userId}</strong> with Two-Tower.
             </p>
             <table>
                 <thead>
@@ -1038,7 +961,7 @@ class MovieLensApp {
     }
 
     escapeHtml(str) {
-        return str
+        return String(str)
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;');
@@ -1049,5 +972,5 @@ class MovieLensApp {
 let app;
 document.addEventListener('DOMContentLoaded', () => {
     app = new MovieLensApp();
-    window.app = app; // for debugging in console
+    window.app = app;
 });
