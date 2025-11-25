@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
-    <title>RAG + Two-Tower Movie Recommender (MovieLens 100K)</title>
+    <title>MovieLens Two-Tower Recommender (TF.js + RAG Query)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
         :root {
@@ -18,7 +18,7 @@
         }
 
         .container {
-            max-width: 1220px;
+            max-width: 1200px;
             margin: 20px auto 40px auto;
             padding: 20px 24px 32px 24px;
             background: #ffffff;
@@ -34,7 +34,8 @@
         }
 
         .subtitle {
-            margin: 0 0 12px 0;
+            margin-top: 0;
+            margin-bottom: 16px;
             color: #4b5563;
             font-size: 14px;
         }
@@ -43,35 +44,26 @@
             display: flex;
             flex-wrap: wrap;
             gap: 8px;
-            margin: 16px 0 10px 0;
+            margin: 16px 0 12px 0;
         }
 
         button {
             border-radius: 999px;
             border: none;
-            padding: 9px 16px;
-            font-size: 14px;
+            padding: 10px 18px;
+            font-size: 15px;
             cursor: pointer;
             font-weight: 500;
             background: #2563eb;
-            color: #ffffff;
+            color: #fff;
             box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
             transition: transform 0.08s ease-out, box-shadow 0.08s ease-out, background 0.15s ease-out;
-        }
-
-        button.secondary {
-            background: #6b7280;
-            box-shadow: 0 4px 10px rgba(55, 65, 81, 0.3);
         }
 
         button:hover:not(:disabled) {
             background: #1d4ed8;
             transform: translateY(-1px);
             box-shadow: 0 6px 16px rgba(37, 99, 235, 0.45);
-        }
-
-        button.secondary:hover:not(:disabled) {
-            background: #4b5563;
         }
 
         button:active:not(:disabled) {
@@ -86,18 +78,18 @@
         }
 
         .status {
-            margin: 8px 0 14px 0;
-            padding: 9px 11px;
+            margin: 10px 0 16px 0;
+            padding: 10px 12px;
             border-radius: 8px;
             background: #eff6ff;
             border: 1px solid #bfdbfe;
-            font-size: 13px;
+            font-size: 14px;
             color: #1e3a8a;
             white-space: pre-wrap;
         }
 
         .chart-container {
-            margin: 18px 0;
+            margin: 20px 0;
         }
 
         .chart-container h2 {
@@ -106,8 +98,8 @@
         }
 
         .hint {
-            margin: 0 0 6px 0;
-            font-size: 12px;
+            margin: 0 0 4px 0;
+            font-size: 13px;
             color: #6b7280;
         }
 
@@ -120,58 +112,19 @@
             background: #ffffff;
         }
 
-        .query-row {
-            margin-top: 10px;
-            padding: 10px 12px;
-            border-radius: 10px;
-            background: #f9fafb;
-            border: 1px dashed #e5e7eb;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            align-items: center;
-        }
-
-        .query-row label {
-            font-size: 13px;
-            font-weight: 600;
-            margin-right: 4px;
-        }
-
-        .query-row input[type="text"] {
-            flex: 1 1 260px;
-            min-width: 0;
-            padding: 8px 11px;
-            border-radius: 999px;
-            border: 1px solid #d1d5db;
-            font-size: 13px;
-            outline: none;
-        }
-
-        .query-row input[type="text"]:focus {
-            border-color: #2563eb;
-            box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.2);
-        }
-
-        .query-hint {
-            flex-basis: 100%;
-            font-size: 11px;
-            color: #6b7280;
-        }
-
         .results {
             margin-top: 24px;
         }
 
         .results h2 {
             font-size: 20px;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
         }
 
         table {
             border-collapse: collapse;
             width: 100%;
-            margin: 8px 0;
+            margin: 10px 0;
             font-size: 13px;
         }
 
@@ -190,35 +143,12 @@
         .side-by-side {
             display: flex;
             flex-wrap: wrap;
-            gap: 18px;
+            gap: 20px;
         }
 
         .side-by-side > div {
             flex: 1 1 0;
             min-width: 260px;
-        }
-
-        .metrics {
-            margin-top: 22px;
-            padding: 10px 12px;
-            border-radius: 10px;
-            background: #f9fafb;
-            border: 1px solid #e5e7eb;
-            font-size: 13px;
-        }
-
-        .metrics h2 {
-            margin: 0 0 6px 0;
-            font-size: 16px;
-        }
-
-        .metrics ul {
-            margin: 4px 0 0 18px;
-            padding: 0;
-        }
-
-        .metrics li {
-            margin-bottom: 4px;
         }
 
         .tips {
@@ -243,8 +173,8 @@
         }
 
         code {
-            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
-                "Courier New", monospace;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+                monospace;
             font-size: 12px;
             background: #f9fafb;
             padding: 1px 3px;
@@ -260,106 +190,102 @@
             h1 {
                 font-size: 22px;
             }
-
-            .controls {
-                gap: 6px;
-            }
-
-            .query-row {
-                padding: 8px 9px;
-            }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>RAG + Two-Tower Movie Recommender</h1>
+        <h1>Two-Tower Movie Recommender (MovieLens 100K)</h1>
         <p class="subtitle">
-            MovieLens 100K • TensorFlow.js in-browser demo • Retrieval-Augmented Generation + Two-Tower CF.
+            Modern RecSys demo: RAG-style text query + TF.js two-tower retrieval on MovieLens 100K.
         </p>
 
         <div class="controls">
-            <button id="loadData">Load Data</button>
-            <button id="train" disabled>Train Two-Tower</button>
-            <button id="test" disabled>Test Random User</button>
-            <button id="evaluate" class="secondary" disabled>Eval@5</button>
-        </div>
-
-        <div class="query-row">
-            <label for="queryText">RAG Text Query</label>
-            <input
-                id="queryText"
-                type="text"
-                placeholder='e.g. "dark philosophical sci-fi, no ghosts"'
-            />
-            <button id="querySearch" class="secondary" disabled>Search (Text → Vector)</button>
-            <div class="query-hint">
-                Stage 1 (RAG): your text is turned into a vector and matched with movie-title vectors using cosine
-                similarity. If you have trained the Two-Tower model and clicked “Test”, the same user is used to
-                re-rank text results (hybrid scoring).
-            </div>
+            <button id="loadData" type="button">Load Data</button>
+            <button id="train" type="button" disabled>Train</button>
+            <button id="test" type="button" disabled>Test</button>
         </div>
 
         <div id="status" class="status">Click “Load Data” to start.</div>
 
         <div class="chart-container">
             <h2>Training Loss</h2>
-            <p class="hint">Two-Tower retrieval model with in-batch negatives. Loss should trend down over epochs.</p>
+            <p class="hint">Loss per batch (in-batch negatives). Lower is better.</p>
             <canvas id="lossChart" width="900" height="260"></canvas>
         </div>
 
         <div class="chart-container">
             <h2>Item Embeddings Projection (PCA)</h2>
-            <p class="hint">
-                PCA over learned item embeddings (Two-Tower item tower). Hover over points to see movie titles.
-            </p>
+            <p class="hint">Sampled item embeddings projected to 2D. Hover to inspect movie titles.</p>
             <canvas id="embeddingChart" width="900" height="520"></canvas>
         </div>
 
         <div id="results" class="results"></div>
 
-        <div id="ragResults" class="results"></div>
+        <!-- RAG-style text query section -->
+        <div style="margin-top: 28px; padding-top: 12px; border-top: 1px solid #e5e7eb;">
+            <h2>RAG Text Query</h2>
+            <p class="hint">
+                Describe what you want to watch, e.g.
+                <em>"dark philosophical sci-fi, no ghosts"</em>.
+                We do text retrieval over titles, then re-rank with the two-tower model.
+            </p>
 
-        <div id="metrics" class="metrics" style="display:none;"></div>
+            <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:8px;">
+                <label>
+                    Query:&nbsp;
+                    <input
+                        id="queryText"
+                        type="text"
+                        style="min-width:260px; padding:4px 8px; border:1px solid #d1d5db; border-radius:4px;"
+                        placeholder='dark philosophical sci-fi, no ghosts'
+                    />
+                </label>
+
+                <label>
+                    User ID (optional):&nbsp;
+                    <input
+                        id="queryUserId"
+                        type="number"
+                        style="width:90px; padding:4px 8px; border:1px solid #d1d5db; border-radius:4px;"
+                        placeholder="123"
+                    />
+                </label>
+
+                <!-- THIS BUTTON IS PURELY LOCAL, NO HUGGINGFACE LINK -->
+                <button id="querySearch" type="button">
+                    Search (Text → Vector)
+                </button>
+            </div>
+
+            <div id="queryResults" class="results"></div>
+        </div>
 
         <div class="tips">
-            <h2>How this demo matches the lecture</h2>
+            <h2>How to host &amp; run</h2>
             <ul>
                 <li>
-                    <strong>Stage 1 – RAG (Vector Search):</strong> movie titles are converted to sparse vectors
-                    (token-level bag-of-words). Your text query is encoded with the same encoder and we run cosine
-                    similarity to retrieve candidates.
+                    Put files as:
+                    <code>index.html</code>, <code>app.js</code>, <code>two-tower.js</code>,
+                    and folder <code>data/</code> containing <code>u.data</code>, <code>u.item</code>.
                 </li>
                 <li>
-                    <strong>Stage 3 – Two-Tower CF:</strong> a classic user–item two-tower model (ID → embedding) is
-                    trained on MovieLens 100K interactions using in-batch sampled softmax.
+                    On GitHub Pages, set the source to the branch that has these files at the repo root.
                 </li>
                 <li>
-                    <strong>Hybrid Scoring:</strong> if you have trained the model and run “Test”, text candidates are
-                    re-ranked with a weighted combination of text similarity and collaborative-score from the
-                    Two-Tower user tower.
-                </li>
-                <li>
-                    <strong>Evaluation:</strong> “Eval@5” computes Precision@5, Recall@5, and NDCG@5 over a subset of
-                    users with many ratings.
-                </li>
-                <li>
-                    GitHub Pages layout: keep <code>index.html</code>, <code>app.js</code>,
-                    <code>two-tower.js</code> at the root and MovieLens files at <code>data/u.data</code> and
-                    <code>data/u.item</code>. If you open from disk, use a local server
-                    (<code>python -m http.server</code>) to avoid <code>fetch()</code> issues.
+                    Locally, run from a simple HTTP server:
+                    <code>python -m http.server 8000</code> and open
+                    <code>http://localhost:8000</code>.
                 </li>
             </ul>
         </div>
     </div>
 
-    <!-- TensorFlow.js CDN -->
+    <!-- Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.15.0/dist/tf.min.js"></script>
 
-    <!-- Two-Tower model definition -->
+    <!-- App code -->
     <script src="two-tower.js"></script>
-
-    <!-- App wiring, RAG, evaluation, and UI logic -->
     <script src="app.js"></script>
 </body>
 </html>
