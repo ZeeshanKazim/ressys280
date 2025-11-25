@@ -1,35 +1,35 @@
 // app.js
-// MovieLens 100K Two-Tower + RAG-style text query demo (pure browser, TensorFlow.js)
+// MovieLens 100K Two-Tower + RAG-style demo (pure browser, TensorFlow.js)
 
 class MovieLensApp {
     constructor() {
-        // Raw data
+        // Raw parsed data
         this.interactions = [];
-        this.items = new Map(); // itemId -> {title, year}
+        this.items = new Map();
 
         // Train / eval split
         this.trainInteractions = [];
-        this.testItemsByUser = new Map(); // userId -> [itemId,...]
+        this.testItemsByUser = new Map();
 
-        // ID mappings
+        // ID <-> index mappings
         this.userMap = new Map();
         this.itemMap = new Map();
         this.reverseUserMap = new Map();
         this.reverseItemMap = new Map();
 
-        // Per-user info
-        this.userTopRated = new Map(); // userId -> [interactions sorted]
-        this.qualifiedUsers = []; // users with enough history
+        // Per-user data
+        this.userTopRated = new Map();
+        this.qualifiedUsers = [];
 
-        // Simple text features (tokenized titles)
+        // For simple title-based retrieval (text query)
         this.titleTokensByItem = new Map();
 
-        // Model and training state
+        // Model & training state
         this.model = null;
         this.lossHistory = [];
         this.isTraining = false;
 
-        // Embedding visualization points
+        // Embedding viz state
         this.embeddingPoints = [];
 
         this.config = {
@@ -49,7 +49,7 @@ class MovieLensApp {
     }
 
     // ---------------------------------------------------------------------
-    // UI
+    // UI setup
     // ---------------------------------------------------------------------
 
     initializeUI() {
@@ -91,7 +91,7 @@ class MovieLensApp {
 
         this.updateStatus('Loading MovieLens 100K from ./data ...');
 
-        // Reset state
+        // Reset all state
         this.interactions = [];
         this.items.clear();
         this.trainInteractions = [];
@@ -327,7 +327,7 @@ class MovieLensApp {
                     );
                 }
 
-                // yield to UI
+                // let browser update UI
                 // eslint-disable-next-line no-await-in-loop
                 await new Promise((resolve) => setTimeout(resolve, 0));
             }
@@ -600,7 +600,7 @@ class MovieLensApp {
     }
 
     // ---------------------------------------------------------------------
-    // Test user: historical vs recommendations + metrics
+    // Test: historical vs recommendations + metrics
     // ---------------------------------------------------------------------
 
     async test() {
@@ -796,7 +796,7 @@ class MovieLensApp {
     }
 
     // ---------------------------------------------------------------------
-    // RAG-style text query: text → title tokens → Two-Tower re-rank
+    // RAG-style text query (title vector search + two-tower re-rank)
     // ---------------------------------------------------------------------
 
     handleQueryRecommend() {
@@ -809,14 +809,14 @@ class MovieLensApp {
         const userIdInput = document.getElementById('queryUserId');
         if (!queryInput) {
             this.updateStatus(
-                'Query input (#queryText) not found. Check index.html RAG section.'
+                'Query input (#queryText) not found. Ensure index.html has the RAG section.'
             );
             return;
         }
 
         const rawQuery = queryInput.value.trim();
         if (!rawQuery) {
-            this.updateStatus('Enter a natural-language query (e.g., "dark sci-fi, no ghosts").');
+            this.updateStatus('Enter a natural-language query (e.g., "dark sci-fi with AI").');
             return;
         }
 
@@ -828,6 +828,7 @@ class MovieLensApp {
             }
         }
 
+        // If no explicit / valid user id, pick random qualified user
         if (userId == null) {
             if (!this.qualifiedUsers.length) {
                 this.updateStatus(
@@ -855,9 +856,9 @@ class MovieLensApp {
             return;
         }
 
-        // Stage 1: text retrieval over titles (simple cosine over token sets)
-        const textScores = [];
+        // Stage 1: simple bag-of-words similarity over titles
         const querySet = new Set(queryTokens);
+        const textScores = []; // { itemId, textScore }
 
         this.items.forEach((meta, itemId) => {
             const tokens = this.titleTokensByItem.get(itemId) || [];
@@ -869,13 +870,13 @@ class MovieLensApp {
             });
             if (overlap === 0) return;
             const norm = Math.sqrt(querySet.size * titleSet.size) || 1;
-            const score = overlap / norm;
+            const score = overlap / norm; // cosine-like
             textScores.push({ itemId, textScore: score });
         });
 
         if (!textScores.length) {
             this.updateStatus(
-                'No items matched the query tokens. Try a simpler description or different keywords.'
+                'No items matched the query tokens. Try different or simpler keywords.'
             );
             return;
         }
@@ -884,12 +885,12 @@ class MovieLensApp {
         const candidateCount = Math.min(100, textScores.length);
         const candidates = textScores.slice(0, candidateCount);
 
-        // Stage 2: Two-Tower re-ranking for the user
+        // Stage 2: Two-tower user-aware re-ranking
         const userEmb = this.model.getUserEmbedding(userIndex);
         const allScoresArr = this.model.getScoresForAllItems(userEmb);
 
-        const alpha = 0.4; // weight for text similarity
-        const beta = 0.6; // weight for collaborative score
+        const alpha = 0.4; // text weight
+        const beta = 0.6; // collaborative weight
         const combined = candidates.map((c) => {
             const itemIndex = this.itemMap.get(c.itemId);
             const modelScore =
@@ -907,7 +908,7 @@ class MovieLensApp {
 
         this.displayQueryResults(queryText, userId, topK);
         this.updateStatus(
-            'Text query recommendations ready – top movies ranked by text + Two-Tower signals.'
+            'Text query recommendations ready – ranked by title similarity + Two-Tower scores.'
         );
     }
 
@@ -919,7 +920,7 @@ class MovieLensApp {
             <h2>Query-based Recommendations</h2>
             <p style="font-size:13px; color:#4b5563;">
                 Query: <strong>${this.escapeHtml(queryText)}</strong><br/>
-                Re-ranked for user <strong>${userId}</strong> with Two-Tower.
+                Re-ranked for user <strong>${userId}</strong> using the two-tower model.
             </p>
             <table>
                 <thead>
@@ -972,5 +973,5 @@ class MovieLensApp {
 let app;
 document.addEventListener('DOMContentLoaded', () => {
     app = new MovieLensApp();
-    window.app = app;
+    window.app = app; // for console/debug
 });
