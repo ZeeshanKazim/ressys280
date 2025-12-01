@@ -43,10 +43,10 @@ This project builds on **FlightRank 2025: Aeroclub RecSys Cup (Kaggle)** data to
 
 ---
 
-## 2) Problem Solving & Adaptation (2 pts)
+## 2) Problem Solving & Adaptation
 
 ### Lecturer feedback (interpreted)
-- Initial plan looked like **“ChatGPT UI on top of existing flight portals”**; unclear recommender contribution.  
+- Initial plan looked like **a UI on top of existing flight portals”**; unclear recommender contribution.  
 - To be RecSys-worthy, incorporate data **no portal systematically uses**, e.g., **alliances/mileage groups**, **user & flight reviews** (food/service/punctuality), and **route structure**.  
 - Focus **less on chat interface**, **more** on models and **new signals**.
 
