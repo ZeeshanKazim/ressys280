@@ -1,4 +1,4 @@
-// js/utils.js
+// utils.js
 (function (global) {
   "use strict";
 
@@ -13,7 +13,7 @@
         skipEmptyLines: true,
         complete: (results) => {
           if (results.errors && results.errors.length > 0) {
-            console.error("CSV parse errors:", path, results.errors);
+            console.warn("CSV parse warnings for", path, results.errors);
           }
           resolve(results.data || []);
         },
@@ -75,7 +75,8 @@
   function formatSummary(summary) {
     if (!summary) return "No numeric data.";
     const s = summary;
-    const f = (x) => (x === null || x === undefined || Number.isNaN(x) ? "NA" : x.toFixed(3));
+    const f = (x) =>
+      x === null || x === undefined || Number.isNaN(x) ? "NA" : x.toFixed(3);
     return [
       `count : ${s.n}`,
       `mean  : ${f(s.mean)}`,
@@ -138,7 +139,10 @@
     const root = document.getElementById(id);
     if (!root) return;
     if (!rows || rows.length === 0) {
-      root.innerHTML = '<p class="muted">No data to display.</p>';
+      root.insertAdjacentHTML(
+        "beforeend",
+        '<p class="muted">No data to display.</p>'
+      );
       return;
     }
     const table = document.createElement("table");
@@ -168,7 +172,6 @@
     });
     table.appendChild(tbody);
 
-    root.innerHTML = "";
     const wrapper = document.createElement("div");
     wrapper.className = "table-wrapper";
     wrapper.appendChild(table);
