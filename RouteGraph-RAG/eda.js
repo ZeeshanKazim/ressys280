@@ -1,4 +1,4 @@
-// js/eda.js
+// eda.js
 (function (global) {
   "use strict";
 
@@ -10,7 +10,6 @@
     if (value === null || value === undefined || value === "") return null;
     const s = String(value);
     try {
-      // Examples: "07:25:00" or "1.00:30:00"
       let days = 0;
       let timePart = s;
       if (s.includes(".") && s.includes(":")) {
@@ -20,8 +19,11 @@
           timePart = parts[1];
         }
       }
-      const [hh, mm, ss] = timePart.split(":").map((x) => parseInt(x || "0", 10));
-      const totalMinutes = (days * 24 + hh) * 60 + mm + (ss || 0) / 60;
+      const [hhRaw, mmRaw, ssRaw] = timePart.split(":");
+      const hh = parseInt(hhRaw || "0", 10);
+      const mm = parseInt(mmRaw || "0", 10);
+      const ss = parseInt(ssRaw || "0", 10);
+      const totalMinutes = (days * 24 + hh) * 60 + mm + ss / 60;
       if (!Number.isFinite(totalMinutes)) return null;
       return totalMinutes;
     } catch (e) {
@@ -182,8 +184,10 @@
       frac: count / total,
     }));
 
-    const htmlIntro = `<p>Label distribution for <code>selected</code> (train set):</p>`;
-    U.setHtml("eda-labels", htmlIntro);
+    U.setHtml(
+      "eda-labels",
+      `<p>Label distribution for <code>selected</code> (train set):</p>`
+    );
     U.renderTable(
       "eda-labels",
       rows,
@@ -231,20 +235,19 @@
     const candSummary = U.numericSummary(candCounts);
     const posSummary = U.numericSummary(posCounts);
 
-    let html = `
-      <p>Each <code>ranker_id</code> is a search session (query group).</p>
-      <pre>${[
-        "Candidates per query:",
-        U.formatSummary(candSummary),
-        "",
-        "Positives per query (selected=1):",
-        U.formatSummary(posSummary),
-      ].join("\n")}</pre>
-    `;
+    const text = [
+      "Candidates per query:",
+      U.formatSummary(candSummary),
+      "",
+      "Positives per query (selected=1):",
+      U.formatSummary(posSummary),
+    ].join("\n");
 
-    U.setHtml("eda-query-stats", html);
+    U.setHtml(
+      "eda-query-stats",
+      `<pre>${text}</pre><p class="muted">Each <code>ranker_id</code> represents one query / search session.</p>`
+    );
 
-    // show first 10 groups as a table
     const top = stats
       .slice()
       .sort((a, b) => b.numCandidates - a.numCandidates)
@@ -285,19 +288,23 @@
     const durSummary = U.numericSummary(durations);
     const corrStopsDur = U.correlation(stops, durations);
 
-    let text = "";
-    text += "Price (totalPrice)\n";
-    text += U.formatSummary(priceSummary) + "\n\n";
-    text += "Log price (log_totalPrice)\n";
-    text += U.formatSummary(logSummary) + "\n\n";
-    text += "Duration (minutes)\n";
-    text += U.formatSummary(durSummary) + "\n\n";
-    text += "Correlation(stops, duration_minutes): " +
-      (corrStopsDur === null ? "NA" : corrStopsDur.toFixed(3));
+    const text = [
+      "Price (totalPrice)",
+      U.formatSummary(priceSummary),
+      "",
+      "Log price (log_totalPrice)",
+      U.formatSummary(logSummary),
+      "",
+      "Duration (minutes)",
+      U.formatSummary(durSummary),
+      "",
+      "Correlation(stops, duration_minutes): " +
+        (corrStopsDur === null ? "NA" : corrStopsDur.toFixed(3)),
+    ].join("\n");
 
     U.setHtml(
       "eda-price-duration",
-      `<pre>${text}</pre><p class="muted">You can describe these in your report as heavy-tailed prices, non-linear duration vs. stops, etc.</p>`
+      `<pre>${text}</pre><p class="muted">These statistics show heavy-tailed prices, the effect of log transform, and the relationship between stops and duration.</p>`
     );
   }
 
@@ -353,7 +360,7 @@
       },
     ]);
 
-    // Chart for carriers
+    // chart
     const canvas = document.getElementById("carrier-chart");
     if (canvas && global.Chart && topCarriers.length > 0) {
       const labels = topCarriers.map((c) => c.carrier);
@@ -398,7 +405,7 @@
       });
     }
 
-    // Routes
+    // routes
     const routeGroups = U.groupBy(trainFeat, (r) => r.route_key || "UNKNOWN");
     const routeStats = [];
     routeGroups.forEach((rows, key) => {
@@ -436,176 +443,4 @@
       {
         key: "meanPrice",
         label: "Mean price",
-        format: (v) => (v == null ? "" : v.toFixed(2)),
-      },
-      {
-        key: "meanDuration",
-        label: "Mean duration (min)",
-        format: (v) => (v == null ? "" : v.toFixed(1)),
-      },
-    ]);
-  }
-
-  function renderExternalCoverage(trainFeat, routes, airports) {
-    if (!routes || routes.length === 0 || !airports || airports.length === 0) {
-      U.setHtml(
-        "eda-external",
-        '<p class="muted">Routes or airports CSV empty/missing, skipping external coverage analysis.</p>'
-      );
-      return;
-    }
-
-    // route coverage
-    const trainRoutes = new Set(
-      trainFeat.map((r) => r.route_key).filter((x) => x)
-    );
-
-    // try to find columns that look like departure/destination
-    const routeCols = Object.keys(routes[0]);
-    const depCol =
-      routeCols.find((c) => c.toLowerCase().includes("departure")) ||
-      routeCols[0];
-    const destCol =
-      routeCols.find((c) => c.toLowerCase().includes("destination")) ||
-      routeCols[1] ||
-      routeCols[0];
-
-    const extRoutes = new Set();
-    for (const row of routes) {
-      const dep = row[depCol];
-      const dest = row[destCol];
-      if (dep && dest) {
-        extRoutes.add(`${dep}-${dest}`);
-      }
-    }
-
-    const overlapRoutes = new Set(
-      [...trainRoutes].filter((r) => extRoutes.has(r))
-    );
-    const routeCoverage =
-      trainRoutes.size === 0 ? 0 : overlapRoutes.size / trainRoutes.size;
-
-    // airport coverage
-    const airportsCols = Object.keys(airports[0]);
-    const airportCodeCol =
-      airportsCols.find((c) => c.toLowerCase().includes("iata")) ||
-      airportsCols.find((c) => c.toLowerCase().includes("id")) ||
-      airportsCols[0];
-
-    const extAirports = new Set(
-      airports
-        .map((row) => row[airportCodeCol])
-        .filter((x) => x !== null && x !== undefined && x !== "")
-    );
-    const trainAirports = new Set();
-    for (const r of trainFeat) {
-      if (r.origin) trainAirports.add(r.origin);
-      if (r.dest) trainAirports.add(r.dest);
-    }
-
-    const overlapAirports = new Set(
-      [...trainAirports].filter((a) => extAirports.has(a))
-    );
-    const airportCoverage =
-      trainAirports.size === 0
-        ? 0
-        : overlapAirports.size / trainAirports.size;
-
-    const html = `
-      <pre>${[
-        "Route coverage vs external route list:",
-        `Train routes:    ${trainRoutes.size}`,
-        `External routes: ${extRoutes.size}`,
-        `Overlap:         ${overlapRoutes.size} (${(routeCoverage * 100).toFixed(
-          1
-        )}%)`,
-        "",
-        "Airport coverage vs external airport list:",
-        `Train airports:  ${trainAirports.size}`,
-        `External airports: ${extAirports.size}`,
-        `Overlap:         ${overlapAirports.size} (${(
-          airportCoverage * 100
-        ).toFixed(1)}%)`,
-      ].join("\n")}</pre>
-    `;
-    U.setHtml("eda-external", html);
-  }
-
-  function renderReviews(reviews) {
-    if (!reviews || reviews.length === 0) {
-      U.setHtml(
-        "eda-reviews",
-        '<p class="muted">Airline_Reviews.csv is empty or missing.</p>'
-      );
-      return;
-    }
-
-    const cols = Object.keys(reviews[0]);
-    const hasOverall = cols.includes("Overall_Rating");
-    const overallValues = hasOverall
-      ? reviews.map((r) => Number(r.Overall_Rating))
-      : [];
-
-    let html = `<p>Reviews dataset: ${reviews.length.toLocaleString()} rows.</p>`;
-
-    html += `<p>Example rows (first 5):</p>`;
-    const sample = reviews.slice(0, 5);
-    const subsetCols = cols.slice(0, 6);
-    U.setHtml("eda-reviews", html);
-    U.renderTable(
-      "eda-reviews",
-      sample,
-      subsetCols.map((c) => ({ key: c, label: c }))
-    );
-
-    if (hasOverall) {
-      const summary = U.numericSummary(overallValues);
-      U.appendHtml(
-        "eda-reviews",
-        `<p>Overall rating summary:</p><pre>${U.formatSummary(
-          summary
-        )}</pre>`
-      );
-    }
-
-    // top airlines by count if column exists
-    const airlineCol =
-      cols.find((c) => c.toLowerCase().includes("airline")) || null;
-    if (airlineCol) {
-      const counts = U.countBy(reviews, (r) => r[airlineCol]);
-      const rowsCounts = Object.entries(counts)
-        .map(([name, count]) => ({ name, count }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 10);
-      U.appendHtml(
-        "eda-reviews",
-        `<p>Top airlines by number of reviews (<code>${airlineCol}</code>):</p>`
-      );
-      U.renderTable("eda-reviews", rowsCounts, [
-        { key: "name", label: "Airline" },
-        {
-          key: "count",
-          label: "# reviews",
-          format: (v) => v.toLocaleString(),
-        },
-      ]);
-    }
-  }
-
-  // ---- Public entrypoint ----
-
-  function run({ train, test, routes, airports, reviews }) {
-    const trainFeat = addBasicFeatures(train);
-    const testFeat = addBasicFeatures(test);
-
-    renderOverview(trainFeat, testFeat);
-    renderLabelDistribution(trainFeat);
-    renderQueryStats(trainFeat);
-    renderPriceAndDuration(trainFeat);
-    renderCarrierAndRoute(trainFeat);
-    renderExternalCoverage(trainFeat, routes, airports);
-    renderReviews(reviews);
-  }
-
-  global.EDA = { run };
-})(window);
+        format: (v) => (v == null ? "" : v.toFixed(2))
