@@ -1,4 +1,4 @@
-// js/app.js
+// app.js
 (function (global) {
   "use strict";
 
@@ -17,37 +17,61 @@
     else el.classList.add("badge-warning");
   }
 
+  // Load one dataset, trying multiple possible paths
+  async function safeLoad(label, paths, required) {
+    let lastError = null;
+    for (const p of paths) {
+      try {
+        console.log(`[EDA] Loading ${label} from "${p}"…`);
+        const data = await U.loadCsv(p);
+        console.log(
+          `[EDA] Loaded ${label} from "${p}" – ${data.length.toLocaleString()} rows`
+        );
+        return data;
+      } catch (err) {
+        console.warn(`[EDA] Failed to load ${label} from "${p}"`, err);
+        lastError = err;
+      }
+    }
+
+    if (required) {
+      throw new Error(
+        `Required dataset "${label}" could not be loaded from any of: ${paths.join(
+          ", "
+        )}`
+      );
+    }
+
+    console.warn(
+      `[EDA] Optional dataset "${label}" is missing. Continuing with empty array.`
+    );
+    return [];
+  }
+
   async function loadAllData() {
     setStatus("Loading CSV files from /data…", "warning");
 
-    const airportsPath1 = "data/Full_Merge_of_All_Unique_Airports.csv";
-    const airportsPath2 = "data/Full_Merge_of_All_Unique Airports.csv";
-
     try {
-      const [train, test, routes, airports, reviews] = await Promise.all([
-        U.loadCsv("data/train.csv"),
-        U.loadCsv("data/test.csv"),
-        U.loadCsv("data/Full_Merge_of_All_Unique_Routes.csv"),
-        U.loadCsv(airportsPath1).catch(() => U.loadCsv(airportsPath2)),
-        U.loadCsv("data/Airline_Reviews.csv"),
-      ]);
+      const train = await safeLoad("train", ["data/train.csv"], true);
+      const test = await safeLoad("test", ["data/test.csv"], false);
+      const routes = await safeLoad(
+        "routes",
+        ["data/Full_Merge_of_All_Unique_Routes.csv"],
+        false
+      );
+      const airports = await safeLoad(
+        "airports",
+        [
+          "data/Full_Merge_of_All_Unique_Airports.csv",
+          "data/Full_Merge_of_All_Unique Airports.csv",
+        ],
+        false
+      );
+      const reviews = await safeLoad(
+        "reviews",
+        ["data/Airline_Reviews.csv"],
+        false
+      );
 
       setStatus("Data loaded. Running EDA…", "warning");
-      EDA.run({ train, test, routes, airports, reviews });
-      setStatus("EDA complete ✓", "success");
-    } catch (err) {
-      console.error("Failed to load data or run EDA:", err);
-      setStatus("Error loading data – check console & paths.", "error");
-    }
-  }
-
-  function init() {
-    document
-      .getElementById("rerun-btn")
-      .addEventListener("click", () => loadAllData());
-
-    loadAllData();
-  }
-
-  window.addEventListener("DOMContentLoaded", init);
-})(window);
+      EDA.run({ train, test, routes, airports, reviews }
