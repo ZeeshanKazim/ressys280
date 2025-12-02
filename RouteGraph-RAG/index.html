@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>RouteGraph-RAG – FlightRank 2025 EDA</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo-title">
+        <img src="assets/logo.svg" alt="Logo" class="logo" onerror="this.style.display='none'" />
+        <div>
+          <h1>RouteGraph-RAG – EDA Dashboard</h1>
+          <p class="subtitle">
+            FlightRank 2025 · Aeroclub RecSys Cup · CP1 Exploratory Data Analysis
+          </p>
+        </div>
+      </div>
+      <div class="status">
+        <span id="load-status" class="badge badge-warning">Waiting to load data…</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="main">
+    <section class="card">
+      <h2>Data & Controls</h2>
+      <p>
+        This page runs fully in the browser using JavaScript. When hosted on GitHub Pages,
+        it will automatically load:
+      </p>
+      <ul class="compact-list">
+        <li><code>data/train.csv</code></li>
+        <li><code>data/test.csv</code></li>
+        <li><code>data/Full_Merge_of_All_Unique_Routes.csv</code></li>
+        <li><code>data/Full_Merge_of_All_Unique_Airports.csv</code> (or the version with a space)</li>
+        <li><code>data/Airline_Reviews.csv</code></li>
+      </ul>
+      <p>
+        If you open <code>index.html</code> directly from your file system (<code>file://</code>),
+        the browser may block file loading. Use GitHub Pages or a simple local HTTP server.
+      </p>
+      <button id="rerun-btn" class="btn">Re-run EDA</button>
+    </section>
+
+    <section class="card">
+      <h2>1. Dataset Overview</h2>
+      <div id="eda-overview"></div>
+    </section>
+
+    <section class="card">
+      <h2>2. Label Distribution & Class Imbalance</h2>
+      <div id="eda-labels"></div>
+    </section>
+
+    <section class="card">
+      <h2>3. Query-level Stats (by <code>ranker_id</code>)</h2>
+      <div id="eda-query-stats"></div>
+    </section>
+
+    <section class="card">
+      <h2>4. Price & Duration</h2>
+      <div id="eda-price-duration"></div>
+    </section>
+
+    <section class="card">
+      <h2>5. Carriers & Routes</h2>
+      <div id="eda-carriers"></div>
+      <canvas id="carrier-chart" class="chart"></canvas>
+      <div id="eda-routes"></div>
+    </section>
+
+    <section class="card">
+      <h2>6. External Routes & Airports Coverage</h2>
+      <div id="eda-external"></div>
+    </section>
+
+    <section class="card">
+      <h2>7. Airline Reviews (RAG Knowledge Base)</h2>
+      <div id="eda-reviews"></div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    RouteGraph-RAG · CP1 EDA · Built with JavaScript, PapaParse &amp; Chart.js
+  </footer>
+
+  <!-- External libraries -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"
+          integrity="sha512-vrE5hqH7RE7DRhwlV/UuQGsoM9ihx/kcwnXURd+TaGtsCqkjyACLqoS1e6fo6bnqu+ijN0kw2f+gCt9cLwFFNQ=="
+          crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"
+          integrity="sha256-0mGVnFrNZd7QsJt8IWrkVnSFd3+MxKcfdMKwmGQpQvk="
+          crossorigin="anonymous"></script>
+
+  <!-- App scripts -->
+  <script src="js/utils.js"></script>
+  <script src="js/eda.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
