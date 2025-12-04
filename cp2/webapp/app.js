@@ -21,7 +21,7 @@ async function main() {
   } catch (err) {
     console.error("Failed to initialise app:", err);
     alert(
-      "Error loading RouteGraph-RAG data. Check console for details and that JSON files exist in data/processed/."
+      "Error loading RouteGraph-RAG data. Check console for details and that JSON files exist in ../data/."
     );
   }
 }
