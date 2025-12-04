@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>RouteGraph-RAG Flight Recommender</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Main stylesheet -->
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-inner">
+      <div>
+        <h1 class="app-title">RouteGraph-RAG</h1>
+        <p class="app-subtitle">
+          The Core of Modern RecSys: RAG + Two-Tower Architecture
+        </p>
+      </div>
+      <div class="header-badge">
+        Checkpoint 2 · Core Functionality Integrated
+      </div>
+    </div>
+  </header>
+
+  <main class="app-main">
+    <!-- Controls panel -->
+    <section class="panel controls-panel">
+      <h2 class="panel-title">Search &amp; Constraints</h2>
+
+      <form id="search-form" class="controls-form">
+        <div class="field-group">
+          <label for="origin-select">Origin</label>
+          <select id="origin-select" required>
+            <!-- Options populated via JS -->
+          </select>
+        </div>
+
+        <div class="field-group">
+          <label for="dest-select">Destination</label>
+          <select id="dest-select" required>
+            <!-- Options populated via JS -->
+          </select>
+        </div>
+
+        <div class="field-group">
+          <label for="max-price-input">Max price</label>
+          <input
+            id="max-price-input"
+            type="number"
+            min="0"
+            step="1000"
+            placeholder="e.g. 60000"
+          />
+        </div>
+
+        <div class="field-group">
+          <label for="max-stops-select">Max stops</label>
+          <select id="max-stops-select">
+            <option value="0">Non-stop only</option>
+            <option value="1">Up to 1 stop</option>
+            <option value="2">Up to 2 stops</option>
+            <option value="3" selected>Any</option>
+          </select>
+        </div>
+
+        <div class="field-group checkbox-group">
+          <input
+            id="avoid-red-eye-checkbox"
+            type="checkbox"
+          />
+          <label for="avoid-red-eye-checkbox">
+            Avoid red-eye flights
+          </label>
+        </div>
+
+        <div class="field-group">
+          <label for="alliance-select">Prefer alliance</label>
+          <select id="alliance-select">
+            <option value="">No preference</option>
+            <option value="SkyTeam">SkyTeam</option>
+            <option value="Star">Star Alliance</option>
+            <option value="Oneworld">Oneworld</option>
+          </select>
+        </div>
+
+        <button id="recommend-btn" type="submit" class="primary-btn">
+          Recommend flights
+        </button>
+
+        <p class="hint-text">
+          The model runs entirely in your browser using pre-computed scores,
+          route-graph features, and review statistics from Colab.
+        </p>
+      </form>
+    </section>
+
+    <!-- Results panel -->
+    <section class="panel results-panel">
+      <h2 class="panel-title">Recommendations</h2>
+
+      <div class="results-columns">
+        <div class="results-column">
+          <h3 class="results-column-title">
+            Baseline (XGBoost / Two-Tower)
+          </h3>
+          <ul id="baseline-results" class="results-list">
+            <!-- Baseline ranking injected via JS -->
+          </ul>
+        </div>
+
+        <div class="results-column">
+          <h3 class="results-column-title">
+            RouteGraph-RAG (Graph + Reviews)
+          </h3>
+          <ul id="enhanced-results" class="results-list">
+            <!-- Enhanced ranking injected via JS -->
+          </ul>
+        </div>
+      </div>
+
+      <div id="no-results-message" class="no-results hidden">
+        Select an origin and destination, set constraints, and click
+        <strong>“Recommend flights”</strong> to see results here.
+      </div>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <p>
+      RouteGraph-RAG · FlightRank 2025 · RecSys Course Project.
+      Backend model trained in Colab, core functionality runs in the browser.
+    </p>
+  </footer>
+
+  <!-- JS entry point (to be added later) -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
