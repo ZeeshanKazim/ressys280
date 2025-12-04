@@ -1,0 +1,1990 @@
+{
+  "AB Aviation": {
+    "num_reviews": 3,
+    "avg_rating": 3.6666666666666665
+  },
+  "ANA All Nippon Airways": {
+    "num_reviews": 100,
+    "avg_rating": 3.75
+  },
+  "ASKY Airlines": {
+    "num_reviews": 22,
+    "avg_rating": 2.3636363636363638
+  },
+  "ATA Airlines": {
+    "num_reviews": 2,
+    "avg_rating": 1.5
+  },
+  "Adria Airways": {
+    "num_reviews": 74,
+    "avg_rating": 4.797297297297297
+  },
+  "Aegean Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 3.02
+  },
+  "Aer Lingus": {
+    "num_reviews": 100,
+    "avg_rating": 2.18
+  },
+  "Aero VIP": {
+    "num_reviews": 3,
+    "avg_rating": 8.666666666666666
+  },
+  "AeroItalia": {
+    "num_reviews": 1,
+    "avg_rating": 2.0
+  },
+  "Aerocaribbean": {
+    "num_reviews": 3,
+    "avg_rating": 3.3333333333333335
+  },
+  "Aeroflot Russian Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 2.75
+  },
+  "Aerolineas Argentinas": {
+    "num_reviews": 97,
+    "avg_rating": 4.041237113402062
+  },
+  "Aeromar": {
+    "num_reviews": 9,
+    "avg_rating": 2.5555555555555554
+  },
+  "Aeromexico": {
+    "num_reviews": 100,
+    "avg_rating": 1.52
+  },
+  "Aerosur": {
+    "num_reviews": 6,
+    "avg_rating": 4.5
+  },
+  "Africa World Airlines": {
+    "num_reviews": 9,
+    "avg_rating": 1.6666666666666667
+  },
+  "Afriqiyah Airways": {
+    "num_reviews": 27,
+    "avg_rating": 4.888888888888889
+  },
+  "Aigle Azur": {
+    "num_reviews": 13,
+    "avg_rating": 3.5384615384615383
+  },
+  "Air Algerie": {
+    "num_reviews": 28,
+    "avg_rating": 3.75
+  },
+  "Air Antilles": {
+    "num_reviews": 4,
+    "avg_rating": 1.0
+  },
+  "Air Arabia": {
+    "num_reviews": 100,
+    "avg_rating": 1.82
+  },
+  "Air Astana": {
+    "num_reviews": 100,
+    "avg_rating": 3.63
+  },
+  "Air Austral": {
+    "num_reviews": 39,
+    "avg_rating": 5.076923076923077
+  },
+  "Air Bagan": {
+    "num_reviews": 15,
+    "avg_rating": 5.866666666666666
+  },
+  "Air Berlin": {
+    "num_reviews": 100,
+    "avg_rating": 3.04
+  },
+  "Air Botswana": {
+    "num_reviews": 17,
+    "avg_rating": 3.9411764705882355
+  },
+  "Air Burkina": {
+    "num_reviews": 2,
+    "avg_rating": 5.5
+  },
+  "Air Busan": {
+    "num_reviews": 20,
+    "avg_rating": 4.1
+  },
+  "Air Cairo": {
+    "num_reviews": 14,
+    "avg_rating": 3.2142857142857144
+  },
+  "Air Canada": {
+    "num_reviews": 100,
+    "avg_rating": 1.68
+  },
+  "Air Canada rouge": {
+    "num_reviews": 100,
+    "avg_rating": 2.29
+  },
+  "Air Caraibes": {
+    "num_reviews": 21,
+    "avg_rating": 4.095238095238095
+  },
+  "Air China": {
+    "num_reviews": 100,
+    "avg_rating": 3.61
+  },
+  "Air Corsica": {
+    "num_reviews": 10,
+    "avg_rating": 4.0
+  },
+  "Air Costa": {
+    "num_reviews": 1,
+    "avg_rating": 8.0
+  },
+  "Air Cote d'Ivoire": {
+    "num_reviews": 1,
+    "avg_rating": 1.0
+  },
+  "Air Djibouti": {
+    "num_reviews": 2,
+    "avg_rating": 6.5
+  },
+  "Air Dolomiti": {
+    "num_reviews": 76,
+    "avg_rating": 4.776315789473684
+  },
+  "Air Europa": {
+    "num_reviews": 100,
+    "avg_rating": 1.94
+  },
+  "Air France": {
+    "num_reviews": 100,
+    "avg_rating": 3.44
+  },
+  "Air Greenland": {
+    "num_reviews": 11,
+    "avg_rating": 3.5454545454545454
+  },
+  "Air Iceland Connect": {
+    "num_reviews": 3,
+    "avg_rating": 1.3333333333333333
+  },
+  "Air India": {
+    "num_reviews": 100,
+    "avg_rating": 2.61
+  },
+  "Air India Express": {
+    "num_reviews": 75,
+    "avg_rating": 3.08
+  },
+  "Air Italy": {
+    "num_reviews": 31,
+    "avg_rating": 3.2580645161290325
+  },
+  "Air Juan": {
+    "num_reviews": 23,
+    "avg_rating": 1.3478260869565217
+  },
+  "Air KBZ": {
+    "num_reviews": 9,
+    "avg_rating": 6.444444444444445
+  },
+  "Air Koryo": {
+    "num_reviews": 45,
+    "avg_rating": 5.688888888888889
+  },
+  "Air Labrador": {
+    "num_reviews": 1,
+    "avg_rating": 2.0
+  },
+  "Air Macau": {
+    "num_reviews": 15,
+    "avg_rating": 3.8666666666666667
+  },
+  "Air Madagascar": {
+    "num_reviews": 21,
+    "avg_rating": 2.857142857142857
+  },
+  "Air Malawi": {
+    "num_reviews": 2,
+    "avg_rating": 3.5
+  },
+  "Air Malta": {
+    "num_reviews": 99,
+    "avg_rating": 2.7676767676767677
+  },
+  "Air Mauritius": {
+    "num_reviews": 97,
+    "avg_rating": 4.546391752577319
+  },
+  "Air Mediterranee": {
+    "num_reviews": 4,
+    "avg_rating": 4.25
+  },
+  "Air Memphis": {
+    "num_reviews": 14,
+    "avg_rating": 2.7857142857142856
+  },
+  "Air Moldova": {
+    "num_reviews": 38,
+    "avg_rating": 3.6842105263157894
+  },
+  "Air Namibia": {
+    "num_reviews": 80,
+    "avg_rating": 4.4875
+  },
+  "Air New Zealand": {
+    "num_reviews": 100,
+    "avg_rating": 2.51
+  },
+  "Air Niugini": {
+    "num_reviews": 45,
+    "avg_rating": 4.066666666666666
+  },
+  "Air North Yukon's Airline": {
+    "num_reviews": 4,
+    "avg_rating": 5.0
+  },
+  "Air Nostrum": {
+    "num_reviews": 42,
+    "avg_rating": 4.404761904761905
+  },
+  "Air Panama": {
+    "num_reviews": 14,
+    "avg_rating": 3.2857142857142856
+  },
+  "Air Pegasus": {
+    "num_reviews": 4,
+    "avg_rating": 4.0
+  },
+  "Air Rarotonga": {
+    "num_reviews": 2,
+    "avg_rating": 1.0
+  },
+  "Air Serbia": {
+    "num_reviews": 100,
+    "avg_rating": 2.02
+  },
+  "Air Seychelles": {
+    "num_reviews": 66,
+    "avg_rating": 3.484848484848485
+  },
+  "Air Tahiti Nui": {
+    "num_reviews": 96,
+    "avg_rating": 3.3645833333333335
+  },
+  "Air Tanzania": {
+    "num_reviews": 20,
+    "avg_rating": 2.1
+  },
+  "Air Transat": {
+    "num_reviews": 100,
+    "avg_rating": 2.19
+  },
+  "Air Zimbabwe": {
+    "num_reviews": 9,
+    "avg_rating": 2.4444444444444446
+  },
+  "AirAsia": {
+    "num_reviews": 100,
+    "avg_rating": 2.1
+  },
+  "AirAsia India": {
+    "num_reviews": 100,
+    "avg_rating": 2.83
+  },
+  "AirAsia Philippines": {
+    "num_reviews": 75,
+    "avg_rating": 2.36
+  },
+  "AirAsia X": {
+    "num_reviews": 100,
+    "avg_rating": 4.01
+  },
+  "AirAsia Zest": {
+    "num_reviews": 27,
+    "avg_rating": 4.296296296296297
+  },
+  "AirSWIFT": {
+    "num_reviews": 4,
+    "avg_rating": 2.5
+  },
+  "Aircalin": {
+    "num_reviews": 31,
+    "avg_rating": 4.967741935483871
+  },
+  "Airlink": {
+    "num_reviews": 50,
+    "avg_rating": 3.5
+  },
+  "Airnorth": {
+    "num_reviews": 26,
+    "avg_rating": 4.769230769230769
+  },
+  "Akasa Air": {
+    "num_reviews": 51,
+    "avg_rating": 2.7450980392156863
+  },
+  "Alaska Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 1.96
+  },
+  "Alitalia": {
+    "num_reviews": 100,
+    "avg_rating": 2.77
+  },
+  "Allegiant Air": {
+    "num_reviews": 100,
+    "avg_rating": 1.43
+  },
+  "Alliance Air": {
+    "num_reviews": 30,
+    "avg_rating": 1.7666666666666666
+  },
+  "Alliance Airlines": {
+    "num_reviews": 5,
+    "avg_rating": 2.2
+  },
+  "Amaszonas": {
+    "num_reviews": 16,
+    "avg_rating": 3.5
+  },
+  "American Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 1.71
+  },
+  "American Eagle": {
+    "num_reviews": 94,
+    "avg_rating": 2.978723404255319
+  },
+  "AnadoluJet": {
+    "num_reviews": 22,
+    "avg_rating": 4.363636363636363
+  },
+  "Andes L\u00edneas A\u00e9reas": {
+    "num_reviews": 4,
+    "avg_rating": 1.0
+  },
+  "Ariana Afghan Airlines": {
+    "num_reviews": 1,
+    "avg_rating": 6.0
+  },
+  "Arik Air": {
+    "num_reviews": 47,
+    "avg_rating": 3.106382978723404
+  },
+  "Arkefly": {
+    "num_reviews": 34,
+    "avg_rating": 4.0588235294117645
+  },
+  "Armenia Air Company": {
+    "num_reviews": 2,
+    "avg_rating": 1.0
+  },
+  "Asiana Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 4.38
+  },
+  "Atlantic Airways": {
+    "num_reviews": 9,
+    "avg_rating": 5.111111111111111
+  },
+  "Auric Air": {
+    "num_reviews": 1,
+    "avg_rating": 1.0
+  },
+  "Aurigny Air": {
+    "num_reviews": 51,
+    "avg_rating": 3.843137254901961
+  },
+  "Austrian Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 2.54
+  },
+  "Avelo Airlines": {
+    "num_reviews": 95,
+    "avg_rating": 2.0
+  },
+  "Avianca": {
+    "num_reviews": 100,
+    "avg_rating": 1.53
+  },
+  "Avior Airlines": {
+    "num_reviews": 6,
+    "avg_rating": 3.1666666666666665
+  },
+  "Azerbaijan Airlines": {
+    "num_reviews": 57,
+    "avg_rating": 4.649122807017544
+  },
+  "Azur Air Germany": {
+    "num_reviews": 2,
+    "avg_rating": 1.0
+  },
+  "BA CityFlyer": {
+    "num_reviews": 71,
+    "avg_rating": 5.126760563380282
+  },
+  "Badr Airlines": {
+    "num_reviews": 1,
+    "avg_rating": 8.0
+  },
+  "Bahamasair": {
+    "num_reviews": 51,
+    "avg_rating": 2.3137254901960786
+  },
+  "Bamboo Airways": {
+    "num_reviews": 37,
+    "avg_rating": 3.5405405405405403
+  },
+  "Bangkok Airways": {
+    "num_reviews": 100,
+    "avg_rating": 4.45
+  },
+  "Bassaka Air": {
+    "num_reviews": 9,
+    "avg_rating": 2.6666666666666665
+  },
+  "Batik Air": {
+    "num_reviews": 100,
+    "avg_rating": 3.63
+  },
+  "Beijing Capital Airlines": {
+    "num_reviews": 5,
+    "avg_rating": 4.4
+  },
+  "Belavia": {
+    "num_reviews": 43,
+    "avg_rating": 4.674418604651163
+  },
+  "Berjaya Air": {
+    "num_reviews": 9,
+    "avg_rating": 5.888888888888889
+  },
+  "Bhutan Airlines": {
+    "num_reviews": 6,
+    "avg_rating": 1.6666666666666667
+  },
+  "Binter Canarias": {
+    "num_reviews": 12,
+    "avg_rating": 3.4166666666666665
+  },
+  "Blue Air": {
+    "num_reviews": 100,
+    "avg_rating": 1.98
+  },
+  "Blue Islands": {
+    "num_reviews": 44,
+    "avg_rating": 3.1363636363636362
+  },
+  "Blue Panorama Airlines": {
+    "num_reviews": 35,
+    "avg_rating": 1.6285714285714286
+  },
+  "Blue1": {
+    "num_reviews": 27,
+    "avg_rating": 4.851851851851852
+  },
+  "Bluebird Airways": {
+    "num_reviews": 7,
+    "avg_rating": 1.0
+  },
+  "BoraJet": {
+    "num_reviews": 1,
+    "avg_rating": 1.0
+  },
+  "Boutique Air": {
+    "num_reviews": 38,
+    "avg_rating": 1.2894736842105263
+  },
+  "Breeze Airways": {
+    "num_reviews": 100,
+    "avg_rating": 2.0
+  },
+  "British Airways": {
+    "num_reviews": 100,
+    "avg_rating": 2.4
+  },
+  "Brussels Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 2.66
+  },
+  "Buddha Air": {
+    "num_reviews": 14,
+    "avg_rating": 4.142857142857143
+  },
+  "Bulgaria Air": {
+    "num_reviews": 95,
+    "avg_rating": 5.178947368421053
+  },
+  "Buta Airways": {
+    "num_reviews": 9,
+    "avg_rating": 2.5555555555555554
+  },
+  "CSA Czech Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 2.8
+  },
+  "Camair-Co": {
+    "num_reviews": 2,
+    "avg_rating": 1.0
+  },
+  "Cambodia Airways": {
+    "num_reviews": 2,
+    "avg_rating": 4.0
+  },
+  "Cambodia Bayon Airlines": {
+    "num_reviews": 1,
+    "avg_rating": 3.0
+  },
+  "Canadian North": {
+    "num_reviews": 7,
+    "avg_rating": 6.428571428571429
+  },
+  "Canaryfly": {
+    "num_reviews": 6,
+    "avg_rating": 5.0
+  },
+  "Cape Air": {
+    "num_reviews": 36,
+    "avg_rating": 2.3055555555555554
+  },
+  "Caribbean Airlines": {
+    "num_reviews": 94,
+    "avg_rating": 3.6382978723404253
+  },
+  "Carpatair": {
+    "num_reviews": 6,
+    "avg_rating": 4.166666666666667
+  },
+  "Cathay Dragon": {
+    "num_reviews": 62,
+    "avg_rating": 6.112903225806452
+  },
+  "Cathay Pacific Airways": {
+    "num_reviews": 100,
+    "avg_rating": 4.01
+  },
+  "Cayman Airways": {
+    "num_reviews": 19,
+    "avg_rating": 2.3684210526315788
+  },
+  "Cebu Pacific": {
+    "num_reviews": 100,
+    "avg_rating": 1.97
+  },
+  "CemAir": {
+    "num_reviews": 3,
+    "avg_rating": 3.0
+  },
+  "Central Mountain Air": {
+    "num_reviews": 11,
+    "avg_rating": 4.181818181818182
+  },
+  "China Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 4.65
+  },
+  "China Eastern Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 3.77
+  },
+  "China Southern Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 6.31
+  },
+  "China United Airlines": {
+    "num_reviews": 5,
+    "avg_rating": 4.2
+  },
+  "Citilink": {
+    "num_reviews": 60,
+    "avg_rating": 5.683333333333334
+  },
+  "CityJet": {
+    "num_reviews": 97,
+    "avg_rating": 3.711340206185567
+  },
+  "Coastal Aviation": {
+    "num_reviews": 4,
+    "avg_rating": 3.75
+  },
+  "Cobalt": {
+    "num_reviews": 18,
+    "avg_rating": 5.222222222222222
+  },
+  "Comair": {
+    "num_reviews": 49,
+    "avg_rating": 5.0
+  },
+  "Condor Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 2.03
+  },
+  "Conviasa": {
+    "num_reviews": 2,
+    "avg_rating": 8.0
+  },
+  "Copa Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 2.05
+  },
+  "Corendon Airlines": {
+    "num_reviews": 47,
+    "avg_rating": 3.0
+  },
+  "Corsair": {
+    "num_reviews": 36,
+    "avg_rating": 4.25
+  },
+  "Croatia Airlines": {
+    "num_reviews": 86,
+    "avg_rating": 5.0
+  },
+  "Cubana Airlines": {
+    "num_reviews": 89,
+    "avg_rating": 3.662921348314607
+  },
+  "Cyprus Airways": {
+    "num_reviews": 11,
+    "avg_rating": 2.727272727272727
+  },
+  "Delta Air Lines": {
+    "num_reviews": 100,
+    "avg_rating": 1.67
+  },
+  "Dimonim Air": {
+    "num_reviews": 1,
+    "avg_rating": 7.0
+  },
+  "Dniproavia": {
+    "num_reviews": 8,
+    "avg_rating": 6.5
+  },
+  "Dragonair": {
+    "num_reviews": 95,
+    "avg_rating": 5.705263157894737
+  },
+  "Druk Air": {
+    "num_reviews": 20,
+    "avg_rating": 6.45
+  },
+  "Dynamic International Airways": {
+    "num_reviews": 1,
+    "avg_rating": 1.0
+  },
+  "EVA Air": {
+    "num_reviews": 100,
+    "avg_rating": 3.94
+  },
+  "EWA Air": {
+    "num_reviews": 1,
+    "avg_rating": 1.0
+  },
+  "Eastern Airlines": {
+    "num_reviews": 3,
+    "avg_rating": 1.0
+  },
+  "Eastern Airways": {
+    "num_reviews": 58,
+    "avg_rating": 3.5344827586206895
+  },
+  "Easyfly": {
+    "num_reviews": 7,
+    "avg_rating": 5.428571428571429
+  },
+  "Edelweiss Air": {
+    "num_reviews": 89,
+    "avg_rating": 3.7752808988764044
+  },
+  "Egyptair": {
+    "num_reviews": 100,
+    "avg_rating": 2.4
+  },
+  "El Al Israel Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 2.99
+  },
+  "Ellinair": {
+    "num_reviews": 14,
+    "avg_rating": 4.928571428571429
+  },
+  "Emirates": {
+    "num_reviews": 100,
+    "avg_rating": 3.23
+  },
+  "Eritrean Airlines": {
+    "num_reviews": 2,
+    "avg_rating": 6.0
+  },
+  "Ernest Airlines": {
+    "num_reviews": 4,
+    "avg_rating": 1.0
+  },
+  "Estonian Air": {
+    "num_reviews": 34,
+    "avg_rating": 4.176470588235294
+  },
+  "Eswatini Air": {
+    "num_reviews": 1,
+    "avg_rating": 9.0
+  },
+  "Ethiopian Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 3.26
+  },
+  "Etihad Airways": {
+    "num_reviews": 100,
+    "avg_rating": 2.32
+  },
+  "Europe Airpost": {
+    "num_reviews": 1,
+    "avg_rating": 9.0
+  },
+  "Eurowings": {
+    "num_reviews": 100,
+    "avg_rating": 1.93
+  },
+  "Evelop Airlines": {
+    "num_reviews": 6,
+    "avg_rating": 2.6666666666666665
+  },
+  "FLYONE": {
+    "num_reviews": 16,
+    "avg_rating": 1.0625
+  },
+  "FMI Air": {
+    "num_reviews": 2,
+    "avg_rating": 1.0
+  },
+  "Felix Airways": {
+    "num_reviews": 2,
+    "avg_rating": 7.5
+  },
+  "Fiji Airways": {
+    "num_reviews": 100,
+    "avg_rating": 3.46
+  },
+  "Finnair": {
+    "num_reviews": 100,
+    "avg_rating": 2.59
+  },
+  "Firefly": {
+    "num_reviews": 74,
+    "avg_rating": 4.824324324324325
+  },
+  "Flair Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 1.6
+  },
+  "Fly540.com": {
+    "num_reviews": 34,
+    "avg_rating": 4.382352941176471
+  },
+  "FlyArystan": {
+    "num_reviews": 7,
+    "avg_rating": 5.571428571428571
+  },
+  "FlySafair": {
+    "num_reviews": 100,
+    "avg_rating": 2.4
+  },
+  "Flynas": {
+    "num_reviews": 50,
+    "avg_rating": 2.12
+  },
+  "French Bee": {
+    "num_reviews": 82,
+    "avg_rating": 2.4634146341463414
+  },
+  "Frontier Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 1.23
+  },
+  "Garuda Indonesia": {
+    "num_reviews": 100,
+    "avg_rating": 3.79
+  },
+  "Georgian Airways": {
+    "num_reviews": 40,
+    "avg_rating": 2.5
+  },
+  "Germania Airline": {
+    "num_reviews": 19,
+    "avg_rating": 4.7894736842105265
+  },
+  "Germanwings": {
+    "num_reviews": 90,
+    "avg_rating": 4.566666666666666
+  },
+  "Go First": {
+    "num_reviews": 100,
+    "avg_rating": 1.74
+  },
+  "GoAir": {
+    "num_reviews": 100,
+    "avg_rating": 1.42
+  },
+  "Golden Myanmar Airlines": {
+    "num_reviews": 3,
+    "avg_rating": 6.0
+  },
+  "Grand Cru Airlines": {
+    "num_reviews": 1,
+    "avg_rating": 1.0
+  },
+  "Greater Bay Airlines": {
+    "num_reviews": 4,
+    "avg_rating": 3.0
+  },
+  "Gulf Air": {
+    "num_reviews": 100,
+    "avg_rating": 3.57
+  },
+  "HOP!": {
+    "num_reviews": 13,
+    "avg_rating": 5.230769230769231
+  },
+  "Hainan Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 4.28
+  },
+  "Hawaiian Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 2.53
+  },
+  "Henan Airlines": {
+    "num_reviews": 1,
+    "avg_rating": 8.0
+  },
+  "Hi Fly": {
+    "num_reviews": 22,
+    "avg_rating": 4.0
+  },
+  "HiSky": {
+    "num_reviews": 4,
+    "avg_rating": 5.0
+  },
+  "Himalaya Airlines": {
+    "num_reviews": 1,
+    "avg_rating": 1.0
+  },
+  "Hong Kong Airlines": {
+    "num_reviews": 99,
+    "avg_rating": 4.808080808080808
+  },
+  "Horizon Air": {
+    "num_reviews": 24,
+    "avg_rating": 5.166666666666667
+  },
+  "Hunnu Air": {
+    "num_reviews": 1,
+    "avg_rating": 9.0
+  },
+  "ITA Airways": {
+    "num_reviews": 100,
+    "avg_rating": 1.8
+  },
+  "Iberia": {
+    "num_reviews": 100,
+    "avg_rating": 2.56
+  },
+  "Iberia Express": {
+    "num_reviews": 69,
+    "avg_rating": 3.36231884057971
+  },
+  "Iberojet": {
+    "num_reviews": 1,
+    "avg_rating": 1.0
+  },
+  "Icelandair": {
+    "num_reviews": 100,
+    "avg_rating": 2.28
+  },
+  "Insel Air": {
+    "num_reviews": 66,
+    "avg_rating": 2.5606060606060606
+  },
+  "InterSky": {
+    "num_reviews": 8,
+    "avg_rating": 4.625
+  },
+  "Intercaribbean Airways": {
+    "num_reviews": 8,
+    "avg_rating": 2.125
+  },
+  "Interjet": {
+    "num_reviews": 100,
+    "avg_rating": 1.28
+  },
+  "Iran Air": {
+    "num_reviews": 38,
+    "avg_rating": 4.552631578947368
+  },
+  "Iraqi Airways": {
+    "num_reviews": 4,
+    "avg_rating": 4.75
+  },
+  "Israir Airlines": {
+    "num_reviews": 18,
+    "avg_rating": 2.5555555555555554
+  },
+  "JC International Airlines": {
+    "num_reviews": 1,
+    "avg_rating": 1.0
+  },
+  "Japan Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 3.71
+  },
+  "Jazeera Airways": {
+    "num_reviews": 47,
+    "avg_rating": 2.4680851063829787
+  },
+  "Jazz": {
+    "num_reviews": 5,
+    "avg_rating": 8.0
+  },
+  "Jeju Air": {
+    "num_reviews": 22,
+    "avg_rating": 3.772727272727273
+  },
+  "Jet Airways": {
+    "num_reviews": 100,
+    "avg_rating": 2.18
+  },
+  "Jet2.com": {
+    "num_reviews": 100,
+    "avg_rating": 2.76
+  },
+  "JetSmart": {
+    "num_reviews": 10,
+    "avg_rating": 2.0
+  },
+  "Jetairfly": {
+    "num_reviews": 20,
+    "avg_rating": 4.4
+  },
+  "Jetblue Airways": {
+    "num_reviews": 100,
+    "avg_rating": 1.46
+  },
+  "Jetstar Airways": {
+    "num_reviews": 100,
+    "avg_rating": 1.61
+  },
+  "Jetstar Asia": {
+    "num_reviews": 100,
+    "avg_rating": 3.06
+  },
+  "Jetstar Japan": {
+    "num_reviews": 40,
+    "avg_rating": 1.825
+  },
+  "Jetstar Pacific": {
+    "num_reviews": 93,
+    "avg_rating": 2.5913978494623655
+  },
+  "JetsuiteX": {
+    "num_reviews": 1,
+    "avg_rating": 1.0
+  },
+  "Jin Air": {
+    "num_reviews": 20,
+    "avg_rating": 4.7
+  },
+  "Joon": {
+    "num_reviews": 11,
+    "avg_rating": 3.3636363636363638
+  },
+  "Jordan Aviation": {
+    "num_reviews": 2,
+    "avg_rating": 5.0
+  },
+  "KD Air": {
+    "num_reviews": 1,
+    "avg_rating": 1.0
+  },
+  "KLM Royal Dutch Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 2.79
+  },
+  "Kam Air": {
+    "num_reviews": 14,
+    "avg_rating": 2.7142857142857144
+  },
+  "Kan Air": {
+    "num_reviews": 2,
+    "avg_rating": 1.0
+  },
+  "Karthago Airlines": {
+    "num_reviews": 21,
+    "avg_rating": 2.857142857142857
+  },
+  "Kenya Airways": {
+    "num_reviews": 100,
+    "avg_rating": 2.79
+  },
+  "Korean Air": {
+    "num_reviews": 100,
+    "avg_rating": 4.57
+  },
+  "Kulula": {
+    "num_reviews": 67,
+    "avg_rating": 3.029850746268657
+  },
+  "Kuwait Airways": {
+    "num_reviews": 100,
+    "avg_rating": 2.83
+  },
+  "LAN Airlines": {
+    "num_reviews": 98,
+    "avg_rating": 4.275510204081633
+  },
+  "LAN Colombia": {
+    "num_reviews": 8,
+    "avg_rating": 4.125
+  },
+  "LAN Peru": {
+    "num_reviews": 16,
+    "avg_rating": 2.9375
+  },
+  "LATAM Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 2.2
+  },
+  "LC Per\u00fa": {
+    "num_reviews": 14,
+    "avg_rating": 3.5714285714285716
+  },
+  "LIAT": {
+    "num_reviews": 66,
+    "avg_rating": 2.9696969696969697
+  },
+  "LOT Polish Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 1.9
+  },
+  "La Compagnie": {
+    "num_reviews": 45,
+    "avg_rating": 4.355555555555555
+  },
+  "Lao Airlines": {
+    "num_reviews": 72,
+    "avg_rating": 5.736111111111111
+  },
+  "Laudamotion": {
+    "num_reviews": 35,
+    "avg_rating": 2.257142857142857
+  },
+  "Level": {
+    "num_reviews": 74,
+    "avg_rating": 1.9054054054054055
+  },
+  "Libyan Airlines": {
+    "num_reviews": 12,
+    "avg_rating": 3.9166666666666665
+  },
+  "Lion Air": {
+    "num_reviews": 100,
+    "avg_rating": 2.24
+  },
+  "Loch Lomond Seaplanes": {
+    "num_reviews": 2,
+    "avg_rating": 3.0
+  },
+  "Loganair": {
+    "num_reviews": 32,
+    "avg_rating": 2.34375
+  },
+  "Lubeck Air": {
+    "num_reviews": 2,
+    "avg_rating": 1.0
+  },
+  "Lucky Air": {
+    "num_reviews": 7,
+    "avg_rating": 3.4285714285714284
+  },
+  "Lufthansa": {
+    "num_reviews": 100,
+    "avg_rating": 2.77
+  },
+  "Luxair": {
+    "num_reviews": 55,
+    "avg_rating": 5.036363636363636
+  },
+  "Lynx Air": {
+    "num_reviews": 100,
+    "avg_rating": 1.71
+  },
+  "MAYAir": {
+    "num_reviews": 1,
+    "avg_rating": 1.0
+  },
+  "MEGA Maldives Airlines": {
+    "num_reviews": 1,
+    "avg_rating": 4.0
+  },
+  "Mack Air": {
+    "num_reviews": 1,
+    "avg_rating": 9.0
+  },
+  "Madagasikara Airways": {
+    "num_reviews": 2,
+    "avg_rating": 1.0
+  },
+  "Mahan Air": {
+    "num_reviews": 30,
+    "avg_rating": 6.033333333333333
+  },
+  "Malawian Airlines": {
+    "num_reviews": 12,
+    "avg_rating": 3.8333333333333335
+  },
+  "Malaysia Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 3.02
+  },
+  "Maldivian": {
+    "num_reviews": 4,
+    "avg_rating": 5.25
+  },
+  "Malindo Air": {
+    "num_reviews": 100,
+    "avg_rating": 1.82
+  },
+  "Mandarin Airlines": {
+    "num_reviews": 4,
+    "avg_rating": 7.5
+  },
+  "Mann Yadanarpon Airlines": {
+    "num_reviews": 2,
+    "avg_rating": 8.0
+  },
+  "Manta Air": {
+    "num_reviews": 1,
+    "avg_rating": 9.0
+  },
+  "Martinair": {
+    "num_reviews": 15,
+    "avg_rating": 3.466666666666667
+  },
+  "Mauritania Airlines": {
+    "num_reviews": 2,
+    "avg_rating": 3.0
+  },
+  "Maya Island Air": {
+    "num_reviews": 2,
+    "avg_rating": 1.0
+  },
+  "Meridiana": {
+    "num_reviews": 84,
+    "avg_rating": 4.083333333333333
+  },
+  "Mihin Lanka": {
+    "num_reviews": 6,
+    "avg_rating": 4.833333333333333
+  },
+  "Mokulele Airlines": {
+    "num_reviews": 10,
+    "avg_rating": 2.6
+  },
+  "Moldavian Airlines": {
+    "num_reviews": 4,
+    "avg_rating": 8.25
+  },
+  "Monarch Airlines": {
+    "num_reviews": 97,
+    "avg_rating": 4.134020618556701
+  },
+  "Montenegro Airlines": {
+    "num_reviews": 17,
+    "avg_rating": 4.647058823529412
+  },
+  "Motor Sich Airlines": {
+    "num_reviews": 3,
+    "avg_rating": 3.3333333333333335
+  },
+  "Myanmar Airways": {
+    "num_reviews": 20,
+    "avg_rating": 7.1
+  },
+  "Myanmar National Airlines": {
+    "num_reviews": 11,
+    "avg_rating": 4.181818181818182
+  },
+  "NAM Air": {
+    "num_reviews": 13,
+    "avg_rating": 4.153846153846154
+  },
+  "NIKI": {
+    "num_reviews": 41,
+    "avg_rating": 4.560975609756097
+  },
+  "Nature Air": {
+    "num_reviews": 16,
+    "avg_rating": 1.5625
+  },
+  "Nauru Airlines": {
+    "num_reviews": 2,
+    "avg_rating": 9.0
+  },
+  "Nepal Airlines": {
+    "num_reviews": 33,
+    "avg_rating": 5.606060606060606
+  },
+  "NextJet": {
+    "num_reviews": 1,
+    "avg_rating": 3.0
+  },
+  "Nile Air": {
+    "num_reviews": 1,
+    "avg_rating": 8.0
+  },
+  "Nok Air": {
+    "num_reviews": 100,
+    "avg_rating": 3.45
+  },
+  "NokScoot": {
+    "num_reviews": 2,
+    "avg_rating": 4.5
+  },
+  "NordStar": {
+    "num_reviews": 1,
+    "avg_rating": 7.0
+  },
+  "Nordavia": {
+    "num_reviews": 3,
+    "avg_rating": 3.0
+  },
+  "Nordic Regional Airlines": {
+    "num_reviews": 1,
+    "avg_rating": 6.0
+  },
+  "Nordica": {
+    "num_reviews": 3,
+    "avg_rating": 3.0
+  },
+  "Nordwind Airlines": {
+    "num_reviews": 2,
+    "avg_rating": 4.0
+  },
+  "Norse Atlantic Airways": {
+    "num_reviews": 57,
+    "avg_rating": 2.1403508771929824
+  },
+  "Norwegian": {
+    "num_reviews": 100,
+    "avg_rating": 2.43
+  },
+  "Nouvelair": {
+    "num_reviews": 17,
+    "avg_rating": 2.235294117647059
+  },
+  "Novair": {
+    "num_reviews": 1,
+    "avg_rating": 7.0
+  },
+  "Novoair": {
+    "num_reviews": 2,
+    "avg_rating": 4.0
+  },
+  "Okay Airways": {
+    "num_reviews": 4,
+    "avg_rating": 6.25
+  },
+  "Olympic Air": {
+    "num_reviews": 91,
+    "avg_rating": 4.846153846153846
+  },
+  "Oman Air": {
+    "num_reviews": 100,
+    "avg_rating": 2.89
+  },
+  "Omni Air International": {
+    "num_reviews": 11,
+    "avg_rating": 2.909090909090909
+  },
+  "Onur Air": {
+    "num_reviews": 83,
+    "avg_rating": 4.192771084337349
+  },
+  "Openskies": {
+    "num_reviews": 62,
+    "avg_rating": 4.5
+  },
+  "PAL Express": {
+    "num_reviews": 7,
+    "avg_rating": 4.0
+  },
+  "PAWA Dominicana": {
+    "num_reviews": 2,
+    "avg_rating": 4.5
+  },
+  "PLAY": {
+    "num_reviews": 100,
+    "avg_rating": 4.4
+  },
+  "Pacific Airlines": {
+    "num_reviews": 13,
+    "avg_rating": 3.0
+  },
+  "Pan Pacific Airlines": {
+    "num_reviews": 1,
+    "avg_rating": 1.0
+  },
+  "Passion Air": {
+    "num_reviews": 3,
+    "avg_rating": 3.0
+  },
+  "Peach Aviation": {
+    "num_reviews": 60,
+    "avg_rating": 2.7666666666666666
+  },
+  "Pegasus Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 1.82
+  },
+  "PenAir": {
+    "num_reviews": 3,
+    "avg_rating": 3.3333333333333335
+  },
+  "Peruvian Airlines": {
+    "num_reviews": 43,
+    "avg_rating": 1.744186046511628
+  },
+  "Petroleum Air Services": {
+    "num_reviews": 3,
+    "avg_rating": 3.3333333333333335
+  },
+  "Philippine Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 2.65
+  },
+  "Phuket Air": {
+    "num_reviews": 38,
+    "avg_rating": 2.3421052631578947
+  },
+  "Pobeda Airlines": {
+    "num_reviews": 38,
+    "avg_rating": 2.1315789473684212
+  },
+  "Porter Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 2.1
+  },
+  "Primera Air": {
+    "num_reviews": 7,
+    "avg_rating": 2.5714285714285716
+  },
+  "Privilege Style": {
+    "num_reviews": 13,
+    "avg_rating": 3.8461538461538463
+  },
+  "Qantas Airways": {
+    "num_reviews": 100,
+    "avg_rating": 2.54
+  },
+  "QantasLink": {
+    "num_reviews": 99,
+    "avg_rating": 6.02020202020202
+  },
+  "Qatar Airways": {
+    "num_reviews": 100,
+    "avg_rating": 4.0
+  },
+  "Qazaq Air": {
+    "num_reviews": 2,
+    "avg_rating": 9.0
+  },
+  "Ravn Alaska": {
+    "num_reviews": 18,
+    "avg_rating": 3.0
+  },
+  "Red Wings Airlines": {
+    "num_reviews": 4,
+    "avg_rating": 2.75
+  },
+  "Regent Airways": {
+    "num_reviews": 22,
+    "avg_rating": 4.181818181818182
+  },
+  "Regional Express": {
+    "num_reviews": 70,
+    "avg_rating": 3.557142857142857
+  },
+  "Rex Airlines": {
+    "num_reviews": 51,
+    "avg_rating": 2.784313725490196
+  },
+  "Rhein-Neckar Air": {
+    "num_reviews": 1,
+    "avg_rating": 1.0
+  },
+  "Rossiya Airlines": {
+    "num_reviews": 41,
+    "avg_rating": 5.414634146341464
+  },
+  "Royal Air Maroc": {
+    "num_reviews": 100,
+    "avg_rating": 3.14
+  },
+  "Royal Brunei Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 5.52
+  },
+  "Royal Jordanian Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 2.17
+  },
+  "Rwandair": {
+    "num_reviews": 88,
+    "avg_rating": 4.340909090909091
+  },
+  "Ryanair": {
+    "num_reviews": 100,
+    "avg_rating": 2.79
+  },
+  "S7 Siberia Airlines": {
+    "num_reviews": 63,
+    "avg_rating": 4.936507936507937
+  },
+  "SA Express": {
+    "num_reviews": 38,
+    "avg_rating": 3.0
+  },
+  "SATA Air Azores": {
+    "num_reviews": 100,
+    "avg_rating": 2.72
+  },
+  "SATENA": {
+    "num_reviews": 2,
+    "avg_rating": 5.0
+  },
+  "SCAT Airlines": {
+    "num_reviews": 4,
+    "avg_rating": 7.0
+  },
+  "SVG Air": {
+    "num_reviews": 1,
+    "avg_rating": 6.0
+  },
+  "Safarilink": {
+    "num_reviews": 2,
+    "avg_rating": 8.0
+  },
+  "Safi Airways": {
+    "num_reviews": 8,
+    "avg_rating": 4.625
+  },
+  "Salam Air": {
+    "num_reviews": 12,
+    "avg_rating": 1.75
+  },
+  "Sansa Airlines": {
+    "num_reviews": 4,
+    "avg_rating": 3.0
+  },
+  "Saudi Arabian Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 2.89
+  },
+  "Scoot": {
+    "num_reviews": 100,
+    "avg_rating": 2.17
+  },
+  "Seaborne Airlines": {
+    "num_reviews": 15,
+    "avg_rating": 1.8
+  },
+  "SereneAir": {
+    "num_reviews": 12,
+    "avg_rating": 3.8333333333333335
+  },
+  "Shaheen Air": {
+    "num_reviews": 12,
+    "avg_rating": 6.916666666666667
+  },
+  "Shandong Airlines": {
+    "num_reviews": 20,
+    "avg_rating": 4.4
+  },
+  "Shanghai Airlines": {
+    "num_reviews": 65,
+    "avg_rating": 4.723076923076923
+  },
+  "Shenzhen Airlines": {
+    "num_reviews": 35,
+    "avg_rating": 4.257142857142857
+  },
+  "Sichuan Airlines": {
+    "num_reviews": 44,
+    "avg_rating": 4.613636363636363
+  },
+  "SilkAir": {
+    "num_reviews": 100,
+    "avg_rating": 5.2
+  },
+  "Silver Airways": {
+    "num_reviews": 100,
+    "avg_rating": 1.29
+  },
+  "Singapore Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 4.21
+  },
+  "Sky Airline": {
+    "num_reviews": 47,
+    "avg_rating": 3.382978723404255
+  },
+  "Sky Express Airlines": {
+    "num_reviews": 78,
+    "avg_rating": 2.4743589743589745
+  },
+  "SkyUp Airlines": {
+    "num_reviews": 3,
+    "avg_rating": 3.0
+  },
+  "SkyWest Airlines": {
+    "num_reviews": 26,
+    "avg_rating": 5.923076923076923
+  },
+  "SkyWork Airlines": {
+    "num_reviews": 2,
+    "avg_rating": 4.5
+  },
+  "Skybus": {
+    "num_reviews": 2,
+    "avg_rating": 3.0
+  },
+  "Skymark Airlines": {
+    "num_reviews": 14,
+    "avg_rating": 5.642857142857143
+  },
+  "Skytrans Airlines": {
+    "num_reviews": 2,
+    "avg_rating": 4.5
+  },
+  "SmartLynx Airlines": {
+    "num_reviews": 13,
+    "avg_rating": 3.3846153846153846
+  },
+  "SmartWings": {
+    "num_reviews": 79,
+    "avg_rating": 3.4936708860759493
+  },
+  "Smartavia": {
+    "num_reviews": 3,
+    "avg_rating": 1.3333333333333333
+  },
+  "Sol L\u00edneas A\u00e9reas": {
+    "num_reviews": 1,
+    "avg_rating": 1.0
+  },
+  "Solomon Airlines": {
+    "num_reviews": 10,
+    "avg_rating": 5.3
+  },
+  "Somon Air": {
+    "num_reviews": 3,
+    "avg_rating": 4.0
+  },
+  "South African Airways": {
+    "num_reviews": 100,
+    "avg_rating": 3.96
+  },
+  "Southwest Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 2.21
+  },
+  "SpiceJet": {
+    "num_reviews": 100,
+    "avg_rating": 1.84
+  },
+  "Spirit Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 1.26
+  },
+  "SriLankan Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 2.67
+  },
+  "Sriwijaya Air": {
+    "num_reviews": 54,
+    "avg_rating": 3.7037037037037037
+  },
+  "StarFlyer": {
+    "num_reviews": 5,
+    "avg_rating": 2.6
+  },
+  "Sudan Airways": {
+    "num_reviews": 1,
+    "avg_rating": 1.0
+  },
+  "Sun Country Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 1.56
+  },
+  "Sun-Air": {
+    "num_reviews": 2,
+    "avg_rating": 1.0
+  },
+  "Sunwing Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 2.05
+  },
+  "Suparna Airlines": {
+    "num_reviews": 1,
+    "avg_rating": 5.0
+  },
+  "Super Air Jet": {
+    "num_reviews": 7,
+    "avg_rating": 2.4285714285714284
+  },
+  "Surinam Airways": {
+    "num_reviews": 19,
+    "avg_rating": 3.8421052631578947
+  },
+  "Swoop": {
+    "num_reviews": 100,
+    "avg_rating": 1.42
+  },
+  "SyrianAir": {
+    "num_reviews": 7,
+    "avg_rating": 3.0
+  },
+  "T'Way Air": {
+    "num_reviews": 15,
+    "avg_rating": 2.466666666666667
+  },
+  "TAAG Angola Airlines": {
+    "num_reviews": 60,
+    "avg_rating": 3.9
+  },
+  "TACA Regional": {
+    "num_reviews": 3,
+    "avg_rating": 3.0
+  },
+  "TAG Airlines": {
+    "num_reviews": 13,
+    "avg_rating": 2.6923076923076925
+  },
+  "TAM Airlines": {
+    "num_reviews": 95,
+    "avg_rating": 4.347368421052631
+  },
+  "TAME": {
+    "num_reviews": 25,
+    "avg_rating": 2.12
+  },
+  "TAP Portugal": {
+    "num_reviews": 100,
+    "avg_rating": 2.15
+  },
+  "TAR Aerolineas": {
+    "num_reviews": 9,
+    "avg_rating": 2.7777777777777777
+  },
+  "TUI Airways": {
+    "num_reviews": 73,
+    "avg_rating": 3.643835616438356
+  },
+  "TUIfly": {
+    "num_reviews": 65,
+    "avg_rating": 4.030769230769231
+  },
+  "TUIfly Nordic": {
+    "num_reviews": 1,
+    "avg_rating": 5.0
+  },
+  "TUS Airways": {
+    "num_reviews": 2,
+    "avg_rating": 5.0
+  },
+  "Tailwind Airlines": {
+    "num_reviews": 3,
+    "avg_rating": 4.666666666666667
+  },
+  "Tame L\u00ednea A\u00e9rea Del Ecuador": {
+    "num_reviews": 12,
+    "avg_rating": 1.9166666666666667
+  },
+  "Thai AirAsia": {
+    "num_reviews": 99,
+    "avg_rating": 3.8585858585858586
+  },
+  "Thai Airways": {
+    "num_reviews": 100,
+    "avg_rating": 4.0
+  },
+  "Thai Lion Air": {
+    "num_reviews": 100,
+    "avg_rating": 1.76
+  },
+  "Thai Smile Airways": {
+    "num_reviews": 100,
+    "avg_rating": 4.08
+  },
+  "Thomas Cook Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 3.09
+  },
+  "Thomas Cook Airlines Scandinavia": {
+    "num_reviews": 9,
+    "avg_rating": 4.888888888888889
+  },
+  "Thomson Airways": {
+    "num_reviews": 100,
+    "avg_rating": 4.46
+  },
+  "Tianjin Airlines": {
+    "num_reviews": 15,
+    "avg_rating": 6.533333333333333
+  },
+  "Tibet Airlines": {
+    "num_reviews": 1,
+    "avg_rating": 8.0
+  },
+  "Tigerair": {
+    "num_reviews": 100,
+    "avg_rating": 4.41
+  },
+  "Tigerair Australia": {
+    "num_reviews": 100,
+    "avg_rating": 1.58
+  },
+  "Tigerair Taiwan": {
+    "num_reviews": 8,
+    "avg_rating": 3.375
+  },
+  "Titan Airways": {
+    "num_reviews": 30,
+    "avg_rating": 3.066666666666667
+  },
+  "TransAsia Airways": {
+    "num_reviews": 5,
+    "avg_rating": 8.0
+  },
+  "TransNusa": {
+    "num_reviews": 1,
+    "avg_rating": 5.0
+  },
+  "Transaero Airlines": {
+    "num_reviews": 53,
+    "avg_rating": 4.773584905660377
+  },
+  "Transavia": {
+    "num_reviews": 100,
+    "avg_rating": 2.3
+  },
+  "Trigana Air": {
+    "num_reviews": 2,
+    "avg_rating": 7.5
+  },
+  "Tropic Air Belize": {
+    "num_reviews": 5,
+    "avg_rating": 5.4
+  },
+  "Tunisair": {
+    "num_reviews": 67,
+    "avg_rating": 4.1940298507462686
+  },
+  "Turkish Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 2.11
+  },
+  "Turkmenistan Airlines": {
+    "num_reviews": 31,
+    "avg_rating": 4.193548387096774
+  },
+  "UP by El Al": {
+    "num_reviews": 4,
+    "avg_rating": 4.0
+  },
+  "US Airways": {
+    "num_reviews": 85,
+    "avg_rating": 2.1294117647058823
+  },
+  "US-Bangla Airlines": {
+    "num_reviews": 6,
+    "avg_rating": 4.0
+  },
+  "Uganda Airlines": {
+    "num_reviews": 5,
+    "avg_rating": 3.8
+  },
+  "Ultra Air": {
+    "num_reviews": 3,
+    "avg_rating": 3.3333333333333335
+  },
+  "United Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 2.05
+  },
+  "Ural Airlines": {
+    "num_reviews": 19,
+    "avg_rating": 3.526315789473684
+  },
+  "Utair Aviation": {
+    "num_reviews": 10,
+    "avg_rating": 6.0
+  },
+  "Uzbekistan Airways": {
+    "num_reviews": 71,
+    "avg_rating": 4.267605633802817
+  },
+  "V Air": {
+    "num_reviews": 7,
+    "avg_rating": 3.5714285714285716
+  },
+  "VLM Airlines": {
+    "num_reviews": 32,
+    "avg_rating": 4.625
+  },
+  "Vanilla Air": {
+    "num_reviews": 13,
+    "avg_rating": 3.4615384615384617
+  },
+  "ViaAir": {
+    "num_reviews": 11,
+    "avg_rating": 1.7272727272727273
+  },
+  "Vietnam Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 4.09
+  },
+  "Virgin America": {
+    "num_reviews": 99,
+    "avg_rating": 3.4646464646464645
+  },
+  "Virgin Australia": {
+    "num_reviews": 100,
+    "avg_rating": 4.3
+  },
+  "Vistara": {
+    "num_reviews": 100,
+    "avg_rating": 3.65
+  },
+  "Viva Air": {
+    "num_reviews": 70,
+    "avg_rating": 1.2
+  },
+  "VivaAerob\u00fas": {
+    "num_reviews": 100,
+    "avg_rating": 1.54
+  },
+  "VivaColombia": {
+    "num_reviews": 48,
+    "avg_rating": 1.2291666666666667
+  },
+  "Volaris": {
+    "num_reviews": 100,
+    "avg_rating": 1.27
+  },
+  "Volotea": {
+    "num_reviews": 100,
+    "avg_rating": 4.12
+  },
+  "Voyage Air": {
+    "num_reviews": 1,
+    "avg_rating": 1.0
+  },
+  "Vueling Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 1.64
+  },
+  "WOW air": {
+    "num_reviews": 100,
+    "avg_rating": 2.28
+  },
+  "Wamos Air": {
+    "num_reviews": 15,
+    "avg_rating": 3.066666666666667
+  },
+  "Wideroe": {
+    "num_reviews": 19,
+    "avg_rating": 2.526315789473684
+  },
+  "Winair": {
+    "num_reviews": 7,
+    "avg_rating": 1.8571428571428572
+  },
+  "Wingo": {
+    "num_reviews": 22,
+    "avg_rating": 1.9090909090909092
+  },
+  "Wings Air": {
+    "num_reviews": 21,
+    "avg_rating": 2.9047619047619047
+  },
+  "Wizz Air": {
+    "num_reviews": 100,
+    "avg_rating": 1.86
+  },
+  "World2Fly": {
+    "num_reviews": 3,
+    "avg_rating": 1.0
+  },
+  "XL Airways France": {
+    "num_reviews": 71,
+    "avg_rating": 4.028169014084507
+  },
+  "Xiamen Airlines": {
+    "num_reviews": 100,
+    "avg_rating": 4.53
+  },
+  "Yakutia Airlines": {
+    "num_reviews": 4,
+    "avg_rating": 5.75
+  },
+  "Yangon Airways": {
+    "num_reviews": 4,
+    "avg_rating": 6.25
+  },
+  "Yemenia": {
+    "num_reviews": 15,
+    "avg_rating": 4.4
+  },
+  "Yeti Airlines": {
+    "num_reviews": 5,
+    "avg_rating": 4.4
+  },
+  "ZIPAIR": {
+    "num_reviews": 50,
+    "avg_rating": 2.46
+  },
+  "Zambia Airways": {
+    "num_reviews": 1,
+    "avg_rating": 7.0
+  },
+  "airBaltic": {
+    "num_reviews": 100,
+    "avg_rating": 2.66
+  },
+  "bmi Regional": {
+    "num_reviews": 58,
+    "avg_rating": 2.8275862068965516
+  },
+  "easyJet": {
+    "num_reviews": 100,
+    "avg_rating": 1.83
+  },
+  "euroAtlantic Airways": {
+    "num_reviews": 16,
+    "avg_rating": 2.0625
+  },
+  "fastjet": {
+    "num_reviews": 33,
+    "avg_rating": 2.878787878787879
+  },
+  "flyadeal": {
+    "num_reviews": 19,
+    "avg_rating": 1.894736842105263
+  },
+  "flybe": {
+    "num_reviews": 4,
+    "avg_rating": 1.25
+  },
+  "flydubai": {
+    "num_reviews": 100,
+    "avg_rating": 1.65
+  }
+}
