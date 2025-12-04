@@ -2,7 +2,6 @@
 // Baseline + enhanced ranking using precomputed scores and JSON features.
 
 // Simple carrier → alliance mapping for demo purposes.
-// (Not exhaustive; adjust if you know real alliances.)
 const CARRIER_ALLIANCE = {
   SU: "SkyTeam",
   S7: "Oneworld",
@@ -67,7 +66,6 @@ function applyHardConstraints(candidates, constraints) {
     }
   }
 
-  // Fallback: if everything filtered out, return original
   return filtered.length > 0 ? filtered : candidates;
 }
 
@@ -170,7 +168,6 @@ function computeGraphRaw(flight, state) {
   const depDeg = Number(stats.departure_degree || 0);
   const arrDeg = Number(stats.arrival_degree || 0);
 
-  // Simple linear combination
   return pop + 0.1 * depDeg + 0.1 * arrDeg;
 }
 
@@ -180,11 +177,11 @@ function computeReviewRaw(flight, state) {
   const stats = state.reviewStats[carrier];
   if (!stats) return 0;
 
-  const rating = Number(stats.avg_rating || 0); // typically 1..5
+  const rating = Number(stats.avg_rating || 0);
   const numReviews = Number(stats.num_reviews || 0);
 
-  const ratingNorm = rating / 5; // 0..1
-  const volumeBoost = Math.log1p(numReviews); // more reviews → slightly higher
+  const ratingNorm = rating / 5;
+  const volumeBoost = Math.log1p(numReviews);
 
   return ratingNorm + 0.1 * volumeBoost;
 }
@@ -231,7 +228,9 @@ function buildEnhancedExplanation(flight, constraints, scoreParts) {
   }
 
   return (
-    "Recommended because of " + bits.join(", ") + ", combined in the hybrid score."
+    "Recommended because of " +
+    bits.join(", ") +
+    ", combined in the hybrid score."
   );
 }
 
@@ -244,7 +243,6 @@ export function rankEnhanced({ state, origin, dest, constraints }) {
   const filtered = applyHardConstraints(candidates, constraints);
   const ctx = computeContextStats(filtered);
 
-  // Compute raw component scores
   const baseRaw = filtered.map((f) => Number(f.score || 0));
   const graphRaw = filtered.map((f) => computeGraphRaw(f, state));
   const reviewRaw = filtered.map((f) => computeReviewRaw(f, state));
@@ -258,7 +256,6 @@ export function rankEnhanced({ state, origin, dest, constraints }) {
     const graphNorm = normalizeValue(graphRaw[idx], graphMin, graphMax);
     const reviewNorm = normalizeValue(reviewRaw[idx], reviewMin, reviewMax);
 
-    // Alliance bonus
     let allianceBonus = 0;
     const pref = constraints.preferredAlliance;
     const carrierAlliance = CARRIER_ALLIANCE[flight.carrier] || "None";
@@ -266,7 +263,6 @@ export function rankEnhanced({ state, origin, dest, constraints }) {
       allianceBonus = 0.08;
     }
 
-    // Hybrid score: main weight on baseline, then graph, then reviews
     const hybridScore =
       0.6 * baseNorm + 0.25 * graphNorm + 0.15 * reviewNorm + allianceBonus;
 
