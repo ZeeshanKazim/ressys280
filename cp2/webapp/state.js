@@ -21,7 +21,7 @@ let recommendButton;
 /**
  * Initialize UI state:
  *  - grab DOM nodes
- *  - populate origin/destination selects
+ *  - populate origin/destination selects (with placeholders)
  *  - wire up "Recommend flights" button
  *
  * onRecommend(constraints) is called whenever user clicks the button.
@@ -67,6 +67,7 @@ export function initState(onRecommend) {
 
 /**
  * Populate origin and destination selects using data from dataStore.
+ * Adds a disabled placeholder so the user must choose explicitly.
  */
 function populateOriginAndDestination() {
   const origins = getAllOrigins();
@@ -74,6 +75,13 @@ function populateOriginAndDestination() {
 
   // Origin
   originSelect.innerHTML = "";
+  const originPlaceholder = document.createElement("option");
+  originPlaceholder.value = "";
+  originPlaceholder.textContent = "Choose origin";
+  originPlaceholder.disabled = true;
+  originPlaceholder.selected = true;
+  originSelect.appendChild(originPlaceholder);
+
   origins.forEach((o) => {
     const opt = document.createElement("option");
     opt.value = o;
@@ -83,26 +91,23 @@ function populateOriginAndDestination() {
 
   // Destination
   destSelect.innerHTML = "";
+  const destPlaceholder = document.createElement("option");
+  destPlaceholder.value = "";
+  destPlaceholder.textContent = "Choose destination";
+  destPlaceholder.disabled = true;
+  destPlaceholder.selected = true;
+  destSelect.appendChild(destPlaceholder);
+
   destinations.forEach((d) => {
     const opt = document.createElement("option");
     opt.value = d;
     opt.textContent = d;
     destSelect.appendChild(opt);
   });
-
-  // Optional: if you want origin change to filter destinations, you can
-  // add that later. For CP2 we keep it simple: all destinations shown.
 }
 
 /**
  * Parse max-stops value from the dropdown into a number or null.
- *
- * Supported values (from the select's value attribute or text):
- *  - "Any"                -> null
- *  - "Non-stop only"      -> 0
- *  - "Up to 1 stop"       -> 1
- *  - "Up to 2 stops"      -> 2
- *  - numeric string "0", "1", "2" also work
  */
 function parseMaxStops(raw) {
   if (!raw || raw === "Any") return null;
@@ -122,17 +127,20 @@ function parseMaxStops(raw) {
  * Returns an object like:
  *
  * {
- *   origin: "KZN",
- *   dest: "DME",
- *   maxPrice: 7000 or null,
+ *   origin: "KZN" | null,
+ *   dest: "DME" | null,
+ *   maxPrice: number | null,
  *   maxStops: 0 | 1 | 2 | null,
  *   avoidRedEye: true | false,
  *   preferAlliance: "No preference" | "SkyTeam" | "Star Alliance" | "Oneworld" | "None"
  * }
  */
 export function getCurrentConstraints() {
-  const origin = originSelect.value;
-  const dest = destSelect.value;
+  const originValue = originSelect.value;
+  const destValue = destSelect.value;
+
+  const origin = originValue === "" ? null : originValue;
+  const dest = destValue === "" ? null : destValue;
 
   // Max price: empty -> null
   const rawPrice = maxPriceInput.value.trim();
@@ -143,11 +151,9 @@ export function getCurrentConstraints() {
   }
 
   const maxStops = parseMaxStops(maxStopsSelect.value);
-
   const avoidRedEye = Boolean(avoidRedEyeCheckbox.checked);
 
   let preferAlliance = allianceSelect.value || "No preference";
-  // Normalize some possible variants
   if (
     preferAlliance !== "SkyTeam" &&
     preferAlliance !== "Star Alliance" &&
