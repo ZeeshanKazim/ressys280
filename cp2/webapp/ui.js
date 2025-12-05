@@ -1,195 +1,317 @@
-// ui.js
-// DOM wiring: dropdowns, submit handler, and result rendering.
+// cp2/webapp/ui.js
+// Rendering logic for the recommendations:
+//  - shows a banner when hard constraints can't be fully satisfied
+//  - renders baseline and hybrid result columns with explanatory text
 
-function populateAirportDropdowns(state) {
-  const originSelect = document.getElementById("origin-select");
-  const destSelect = document.getElementById("dest-select");
+let bannerEl;
+let baselineContainer;
+let hybridContainer;
 
-  originSelect.innerHTML = "";
-  destSelect.innerHTML = "";
+export function initUI() {
+  bannerEl = document.getElementById("constraints-banner");
+  baselineContainer = document.getElementById("baseline-results");
+  hybridContainer = document.getElementById("hybrid-results");
 
-  state.allOrigins.forEach((code) => {
-    const opt = document.createElement("option");
-    opt.value = code;
-    opt.textContent = code;
-    originSelect.appendChild(opt);
-  });
-
-  state.allDests.forEach((code) => {
-    const opt = document.createElement("option");
-    opt.value = code;
-    opt.textContent = code;
-    destSelect.appendChild(opt);
-  });
-
-  if (state.allOrigins.length) {
-    originSelect.value = state.allOrigins[0];
-    state.currentOrigin = state.allOrigins[0];
-  }
-  if (state.allDests.length) {
-    destSelect.value = state.allDests[0];
-    state.currentDest = state.allDests[0];
+  if (!baselineContainer || !hybridContainer) {
+    console.error(
+      "[ui] Missing baseline-results or hybrid-results container. " +
+        "Check IDs in index.html."
+    );
   }
 }
 
-function readConstraintsFromForm() {
-  const maxPriceRaw = document.getElementById("max-price-input").value;
-  const maxStopsRaw = document.getElementById("max-stops-select").value;
-  const avoidRedEye = document.getElementById(
-    "avoid-red-eye-checkbox"
-  ).checked;
-  const preferredAlliance = document.getElementById(
-    "alliance-select"
-  ).value;
+/**
+ * Render both baseline and hybrid columns.
+ *
+ * @param {Object} opts
+ *  - baseline: Array<flight>
+ *  - hybrid: Array<flight>
+ *  - hardConstraintsSatisfied: boolean
+ *  - constraints: { origin, dest, maxPrice, maxStops, avoidRedEye, preferAlliance }
+ */
+export function renderRecommendations(opts) {
+  const { baseline, hybrid, hardConstraintsSatisfied, constraints } = opts;
 
-  const maxPrice =
-    maxPriceRaw === "" ? null : Number.parseFloat(maxPriceRaw || "0");
-  const maxStops = Number.parseInt(maxStopsRaw || "3", 10);
+  if (!baselineContainer || !hybridContainer) {
+    initUI(); // try again if not initialized
+  }
 
-  return {
-    maxPrice: Number.isFinite(maxPrice) ? maxPrice : null,
-    maxStops: Number.isFinite(maxStops) ? maxStops : 3,
-    avoidRedEye,
-    preferredAlliance,
-  };
+  // Clear containers
+  baselineContainer.innerHTML = "";
+  hybridContainer.innerHTML = "";
+
+  // Banner
+  renderBanner(hardConstraintsSatisfied, constraints);
+
+  // No results case
+  if (!baseline.length && !hybrid.length) {
+    const msg = document.createElement("div");
+    msg.className = "no-results";
+    msg.textContent = "No flights found for this route.";
+    baselineContainer.appendChild(msg);
+    hybridContainer.appendChild(msg.cloneNode(true));
+    return;
+  }
+
+  // Render baseline
+  baseline.forEach((flight, idx) => {
+    const card = createFlightCard({
+      flight,
+      rank: idx + 1,
+      columnType: "baseline",
+      constraints
+    });
+    baselineContainer.appendChild(card);
+  });
+
+  // Render hybrid
+  hybrid.forEach((flight, idx) => {
+    const card = createFlightCard({
+      flight,
+      rank: idx + 1,
+      columnType: "hybrid",
+      constraints
+    });
+    hybridContainer.appendChild(card);
+  });
 }
 
-function formatMoney(v) {
-  if (!Number.isFinite(Number(v))) return "N/A";
-  return Number(v).toFixed(0);
+function renderBanner(hardConstraintsSatisfied, constraints) {
+  if (!bannerEl) {
+    bannerEl = document.getElementById("constraints-banner");
+    if (!bannerEl) return;
+  }
+
+  bannerEl.innerHTML = "";
+
+  if (!hardConstraintsSatisfied) {
+    const div = document.createElement("div");
+    div.className = "banner banner-warning";
+    div.textContent =
+      "No flights matched all of your hard constraints. Showing closest available options instead.";
+    bannerEl.appendChild(div);
+  } else {
+    // Optionally show a subtle “constraints applied” message or nothing
+  }
 }
 
-function formatDurationMinutes(v) {
-  const num = Number(v);
-  if (!Number.isFinite(num)) return "N/A";
-  const h = Math.floor(num / 60);
-  const m = Math.round(num % 60);
+function createFlightCard({ flight, rank, columnType, constraints }) {
+  const card = document.createElement("article");
+  card.className = "flight-card";
+
+  // Header: rank + route
+  const header = document.createElement("div");
+  header.className = "flight-card-header";
+
+  const rankEl = document.createElement("div");
+  rankEl.className = "flight-rank";
+  rankEl.textContent = `#${rank}`;
+
+  const titleEl = document.createElement("div");
+  titleEl.className = "flight-title";
+  titleEl.textContent = `${flight.carrier} ${flight.origin} → ${flight.dest}`;
+
+  header.appendChild(rankEl);
+  header.appendChild(titleEl);
+
+  // Badges
+  const badgesEl = document.createElement("div");
+  badgesEl.className = "flight-badges";
+
+  if (rank === 1) {
+    const topBadge = document.createElement("span");
+    topBadge.className = "badge badge-primary";
+    topBadge.textContent =
+      columnType === "baseline" ? "Top pick" : "Top hybrid pick";
+    badgesEl.appendChild(topBadge);
+  }
+
+  if (flight.isFastest) {
+    const b = document.createElement("span");
+    b.className = "badge badge-neutral";
+    b.textContent = "Fastest";
+    badgesEl.appendChild(b);
+  }
+
+  if (flight.isCheapest) {
+    const b = document.createElement("span");
+    b.className = "badge badge-neutral";
+    b.textContent = "Cheapest";
+    badgesEl.appendChild(b);
+  }
+
+  if (flight.stops === 0) {
+    const b = document.createElement("span");
+    b.className = "badge badge-neutral";
+    b.textContent = "Non-stop";
+    badgesEl.appendChild(b);
+  }
+
+  if (flight.redEye) {
+    const b = document.createElement("span");
+    b.className = "badge badge-warning";
+    b.textContent = "Red-eye";
+    badgesEl.appendChild(b);
+  }
+
+  header.appendChild(badgesEl);
+
+  // Body: details
+  const body = document.createElement("div");
+  body.className = "flight-card-body";
+
+  const topRow = document.createElement("div");
+  topRow.className = "flight-top-row";
+
+  const priceEl = document.createElement("div");
+  priceEl.className = "flight-price";
+  priceEl.textContent = `Price: ${formatPrice(flight.price)}`;
+
+  const durEl = document.createElement("div");
+  durEl.className = "flight-duration";
+  durEl.textContent = `Duration: ${formatDuration(flight.durationMinutes)}`;
+
+  const stopsEl = document.createElement("div");
+  stopsEl.className = "flight-stops";
+  stopsEl.textContent = `Stops: ${flight.stops}`;
+
+  topRow.appendChild(priceEl);
+  topRow.appendChild(durEl);
+  topRow.appendChild(stopsEl);
+
+  const midRow = document.createElement("div");
+  midRow.className = "flight-mid-row";
+
+  const depEl = document.createElement("div");
+  depEl.className = "flight-departure";
+  depEl.textContent = `Departure: ${formatDateTime(flight.departureIso)}`;
+
+  const airlineEl = document.createElement("div");
+  airlineEl.className = "flight-airline";
+  airlineEl.textContent = `${flight.airlineName} (${flight.alliance})`;
+
+  midRow.appendChild(depEl);
+  midRow.appendChild(airlineEl);
+
+  // Explanation
+  const expl = document.createElement("div");
+  expl.className = "flight-explanation";
+  expl.textContent = buildExplanation(flight, columnType, constraints);
+
+  body.appendChild(topRow);
+  body.appendChild(midRow);
+  body.appendChild(expl);
+
+  card.appendChild(header);
+  card.appendChild(body);
+  return card;
+}
+
+function formatPrice(p) {
+  if (!Number.isFinite(p)) return String(p);
+  return p.toFixed(0);
+}
+
+function formatDuration(minutes) {
+  if (!Number.isFinite(minutes)) return "";
+  const h = Math.floor(minutes / 60);
+  const m = Math.round(minutes % 60);
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
   return `${h}h ${m}m`;
 }
 
-function renderResultList(containerId, items) {
-  const container = document.getElementById(containerId);
-  container.innerHTML = "";
-
-  items.forEach((item, index) => {
-    const flight = item.flight;
-    const explanation = item.explanation;
-    const badges = item.badges || [];
-
-    const li = document.createElement("li");
-    li.className = "result-item";
-
-    const header = document.createElement("div");
-    header.className = "result-header";
-
-    const rankSpan = document.createElement("span");
-    rankSpan.className = "result-rank";
-    rankSpan.textContent = `#${index + 1}`;
-
-    const titleSpan = document.createElement("span");
-    titleSpan.className = "result-title";
-    titleSpan.textContent = `${flight.carrier || "??"}  ${
-      flight.origin || "?"
-    } → ${flight.dest || "?"}`;
-
-    const badgesDiv = document.createElement("div");
-    badgesDiv.className = "result-badges";
-    badges.forEach((label, i) => {
-      const badge = document.createElement("span");
-      badge.className = "badge";
-      if (index === 0 && i === 0) {
-        badge.classList.add("badge-accent");
-      }
-      badge.textContent = label;
-      badgesDiv.appendChild(badge);
-    });
-
-    header.appendChild(rankSpan);
-    header.appendChild(titleSpan);
-    header.appendChild(badgesDiv);
-
-    const meta = document.createElement("div");
-    meta.className = "result-meta";
-
-    const priceSpan = document.createElement("span");
-    priceSpan.textContent = `Price: ${formatMoney(flight.totalPrice)}`;
-
-    const stopsSpan = document.createElement("span");
-    const stops = Number(flight.num_stops || 0);
-    stopsSpan.textContent = `Stops: ${stops}`;
-
-    const durationSpan = document.createElement("span");
-    durationSpan.textContent = `Duration: ${formatDurationMinutes(
-      flight.duration_minutes
-    )}`;
-
-    const depSpan = document.createElement("span");
-    depSpan.textContent = `Departure: ${
-      flight.legs0_departureAt || "unknown"
-    }`;
-
-    meta.appendChild(priceSpan);
-    meta.appendChild(stopsSpan);
-    meta.appendChild(durationSpan);
-    meta.appendChild(depSpan);
-
-    const expl = document.createElement("div");
-    expl.className = "result-expl";
-    expl.textContent = explanation;
-
-    li.appendChild(header);
-    li.appendChild(meta);
-    li.appendChild(expl);
-
-    container.appendChild(li);
+function formatDateTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString(undefined, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
   });
 }
 
-export function bindUI({ state, rankBaseline, rankEnhanced }) {
-  populateAirportDropdowns(state);
+/**
+ * Build explanation text for a flight card.
+ */
+function buildExplanation(flight, columnType, constraints) {
+  if (columnType === "baseline") {
+    return buildBaselineExplanation(flight, constraints);
+  }
+  return buildHybridExplanation(flight, constraints);
+}
 
-  const form = document.getElementById("search-form");
-  const noResultsEl = document.getElementById("no-results-message");
+function buildBaselineExplanation(flight, constraints) {
+  const parts = [];
 
-  form.addEventListener("submit", (evt) => {
-    evt.preventDefault();
+  parts.push("Ranked by baseline model score using price, duration, and stops");
 
-    const originSelect = document.getElementById("origin-select");
-    const destSelect = document.getElementById("dest-select");
+  if (constraints.maxPrice != null && flight.price <= constraints.maxPrice) {
+    parts.push(`within your max price ${constraints.maxPrice}`);
+  }
 
-    const origin = originSelect.value;
-    const dest = destSelect.value;
-    const constraints = readConstraintsFromForm();
+  if (constraints.maxStops != null && flight.stops <= constraints.maxStops) {
+    parts.push(`within your max ${constraints.maxStops} stop(s)`);
+  }
 
-    state.currentOrigin = origin;
-    state.currentDest = dest;
-    state.constraints = constraints;
-
-    const baselineItems = rankBaseline({
-      state,
-      origin,
-      dest,
-      constraints,
-    });
-
-    const enhancedItems = rankEnhanced({
-      state,
-      origin,
-      dest,
-      constraints,
-    });
-
-    const hasAny =
-      (baselineItems && baselineItems.length > 0) ||
-      (enhancedItems && enhancedItems.length > 0);
-
-    if (hasAny) {
-      noResultsEl.classList.add("hidden");
+  if (constraints.avoidRedEye) {
+    if (!flight.redEye) {
+      parts.push("avoids red-eye flights as requested");
     } else {
-      noResultsEl.classList.remove("hidden");
+      parts.push(
+        "red-eye flight shown because no better options fully met your constraints"
+      );
     }
+  }
 
-    renderResultList("baseline-results", baselineItems);
-    renderResultList("enhanced-results", enhancedItems);
-  });
+  return sentenceJoin(parts) + ".";
+}
+
+function buildHybridExplanation(flight, constraints) {
+  const parts = [];
+
+  parts.push("Recommended by hybrid score combining baseline model");
+
+  // Route graph
+  if (flight.routePopularity != null && flight.routePopularity > 0) {
+    parts.push("route popularity");
+  }
+  if (
+    (flight.departureDegree != null && flight.departureDegree > 0) ||
+    (flight.arrivalDegree != null && flight.arrivalDegree > 0)
+  ) {
+    parts.push("network connectivity (RouteGraph degrees)");
+  }
+
+  // Reviews
+  if (flight.reviewAvgRating != null) {
+    const rating = flight.reviewAvgRating.toFixed(1);
+    parts.push(`airline reviews around ${rating}/5`);
+  }
+
+  // Alliance
+  if (
+    constraints.preferAlliance &&
+    constraints.preferAlliance !== "No preference"
+  ) {
+    if (flight.alliance === constraints.preferAlliance) {
+      parts.push(`${flight.alliance} alliance matching your preference`);
+    } else {
+      parts.push(
+        `does not match your preferred alliance (${constraints.preferAlliance})`
+      );
+    }
+  }
+
+  return sentenceJoin(parts) + ".";
+}
+
+function sentenceJoin(parts) {
+  if (!parts.length) return "";
+  if (parts.length === 1) return parts[0];
+  const [first, ...rest] = parts;
+  return first + " and " + rest.join(", ");
 }
