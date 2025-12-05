@@ -10,8 +10,6 @@ import { getRecommendations } from "./ranking.js";
 import { initUI, renderRecommendations } from "./ui.js";
 
 async function main() {
-  // Basic hooks
-  const root = document.getElementById("app-root");
   const loadingEl = document.getElementById("loading-indicator");
   const errorEl = document.getElementById("error-indicator");
 
@@ -29,16 +27,7 @@ async function main() {
     // 3) Init state and wiring to "Recommend" button
     initState(handleRecommend);
 
-    // 4) Optionally: run one recommendation on initial load
-    const initialConstraints = getCurrentConstraints();
-    const initialResult = getRecommendations(initialConstraints);
-    renderRecommendations({
-      baseline: initialResult.baseline,
-      hybrid: initialResult.hybrid,
-      hardConstraintsSatisfied: initialResult.hardConstraintsSatisfied,
-      constraints: initialConstraints
-    });
-
+    // No initial auto-recommendation: user must pick origin/destination first.
     if (loadingEl) {
       loadingEl.style.display = "none";
     }
@@ -60,6 +49,12 @@ async function main() {
  * Called whenever the user clicks "Recommend flights" in the UI.
  */
 function handleRecommend(constraints) {
+  // Require user to choose origin and destination
+  if (!constraints.origin || !constraints.dest) {
+    window.alert("Please select both origin and destination.");
+    return;
+  }
+
   const result = getRecommendations(constraints);
 
   renderRecommendations({
