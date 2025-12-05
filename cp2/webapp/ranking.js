@@ -1,297 +1,218 @@
-// ranking.js
-// Baseline + enhanced ranking using precomputed scores and JSON features.
+// cp2/webapp/ranking.js
+// Core ranking logic:
+//  - load flights for a route
+//  - apply hard constraints (price, stops, red-eye)
+//  - compute baseline and hybrid scores
+//  - return two ranked lists for the UI.
 
-// Simple carrier → alliance mapping for demo purposes.
-const CARRIER_ALLIANCE = {
-  SU: "SkyTeam",
-  S7: "Oneworld",
-  U6: "Star",
-  UT: "None",
-  DP: "None",
-};
+import {
+  getFlightsForRoute,
+  getReviewForCarrier,
+  getCarrierAlliance,
+  getCarrierName
+} from "./dataStore.js";
 
-function getMinMax(arr) {
-  if (!arr.length) return [0, 0];
-  let min = arr[0];
-  let max = arr[0];
-  for (let i = 1; i < arr.length; i++) {
-    const v = arr[i];
-    if (v < min) min = v;
-    if (v > max) max = v;
+/**
+ * Main entry point.
+ *
+ * @param {Object} constraints
+ * {
+ *   origin: "KZN",
+ *   dest: "DME",
+ *   maxPrice: number | null,
+ *   maxStops: number | null,
+ *   avoidRedEye: boolean,
+ *   preferAlliance: "No preference" | "SkyTeam" | "Star Alliance" | "Oneworld" | "None"
+ * }
+ *
+ * @returns {{
+ *   baseline: Array<Object>,
+ *   hybrid: Array<Object>,
+ *   hardConstraintsSatisfied: boolean
+ * }}
+ */
+export function getRecommendations(constraints) {
+  const { origin, dest } = constraints;
+
+  // 1) Get all flights for this route
+  const allFlights = getFlightsForRoute(origin, dest);
+
+  if (!allFlights || allFlights.length === 0) {
+    return {
+      baseline: [],
+      hybrid: [],
+      hardConstraintsSatisfied: true
+    };
   }
-  return [min, max];
+
+  // 2) Apply hard constraints: price, stops, red-eye
+  const hardFiltered = allFlights.filter((f) =>
+    passesHardConstraints(f, constraints)
+  );
+
+  let usedFlights = hardFiltered;
+  let hardConstraintsSatisfied = true;
+
+  if (hardFiltered.length === 0) {
+    // No flights satisfy all hard constraints — fall back to all flights
+    usedFlights = allFlights;
+    hardConstraintsSatisfied = false;
+  }
+
+  // 3) Enrich flights with review + alliance info
+  const enriched = usedFlights.map((f) => enrichFlight(f));
+
+  // 4) Compute hybrid scores using route graph + reviews + alliance preference
+  const withScores = computeHybridScores(enriched, constraints);
+
+  // 5) Rank: baseline and hybrid
+  const baselineRanked = [...withScores].sort(
+    (a, b) => b.baselineScore - a.baselineScore
+  );
+
+  const hybridRanked = [...withScores].sort(
+    (a, b) => b.hybridScore - a.hybridScore
+  );
+
+  return {
+    baseline: baselineRanked,
+    hybrid: hybridRanked,
+    hardConstraintsSatisfied
+  };
 }
 
-function normalizeValue(v, min, max) {
-  if (max === min) return 0.5;
-  return (v - min) / (max - min);
-}
-
-function getCandidatesForRoute(state, origin, dest) {
-  const candidates = [];
-  Object.values(state.flightsByQuery).forEach((list) => {
-    list.forEach((f) => {
-      if (f.origin === origin && f.dest === dest) {
-        candidates.push(f);
-      }
-    });
-  });
-  return candidates;
-}
-
-function applyHardConstraints(candidates, constraints) {
-  let filtered = candidates;
+/**
+ * Hard constraints: price, stops, red-eye.
+ */
+function passesHardConstraints(flight, constraints) {
+  const { maxPrice, maxStops, avoidRedEye } = constraints;
 
   // Max price
-  if (constraints.maxPrice !== null && !Number.isNaN(constraints.maxPrice)) {
-    filtered = filtered.filter((f) => {
-      const p = Number(f.totalPrice);
-      return Number.isFinite(p) ? p <= constraints.maxPrice : true;
-    });
+  if (maxPrice != null && flight.price > maxPrice) {
+    return false;
   }
 
-  // Max stops (3 = "any")
-  if (constraints.maxStops !== 3) {
-    filtered = filtered.filter((f) => {
-      const s = Number(f.num_stops || 0);
-      return s <= constraints.maxStops;
-    });
+  // Max stops
+  if (maxStops != null && flight.stops > maxStops) {
+    return false;
   }
 
-  // Avoid red-eye
-  if (constraints.avoidRedEye) {
-    const nonRed = filtered.filter((f) => Number(f.red_eye || 0) === 0);
-    if (nonRed.length > 0) {
-      filtered = nonRed;
-    }
+  // Red-eye
+  if (avoidRedEye && flight.redEye) {
+    return false;
   }
 
-  return filtered.length > 0 ? filtered : candidates;
+  return true;
 }
 
-function computeContextStats(flights) {
-  let minPrice = Infinity;
+/**
+ * Attach airline name, alliance, review stats.
+ */
+function enrichFlight(flight) {
+  const carrier = flight.carrier;
+
+  const reviewInfo = getReviewForCarrier(carrier);
+  let airlineName = carrier;
+  let alliance = "None";
+  let numReviews = null;
+  let avgRating = null;
+
+  if (reviewInfo) {
+    airlineName = reviewInfo.airlineName;
+    alliance = reviewInfo.alliance;
+    numReviews = reviewInfo.numReviews;
+    avgRating = reviewInfo.avgRating;
+  } else {
+    // Fallback if we have metadata but no review entry
+    airlineName = getCarrierName(carrier);
+    alliance = getCarrierAlliance(carrier) || "None";
+  }
+
+  return {
+    ...flight,
+    airlineName,
+    alliance,
+    reviewNumReviews: numReviews,
+    reviewAvgRating: avgRating
+  };
+}
+
+/**
+ * Compute hybrid scores for a list of flights, taking into account:
+ *  - baseline score
+ *  - route popularity / degrees
+ *  - review rating
+ *  - alliance preference
+ */
+function computeHybridScores(flights, constraints) {
+  if (!flights.length) return [];
+
+  // Route-graph normalization
+  let maxRoutePop = 0;
+  let maxDeg = 0;
   let minDuration = Infinity;
+  let minPrice = Infinity;
 
   flights.forEach((f) => {
-    const price = Number(f.totalPrice);
-    const dur = Number(f.duration_minutes);
-    if (Number.isFinite(price) && price < minPrice) minPrice = price;
-    if (Number.isFinite(dur) && dur < minDuration) minDuration = dur;
+    const pop = Number(f.routePopularity || 0);
+    if (pop > maxRoutePop) maxRoutePop = pop;
+
+    const degSum = Number(f.departureDegree || 0) + Number(f.arrivalDegree || 0);
+    if (degSum > maxDeg) maxDeg = degSum;
+
+    if (f.durationMinutes < minDuration) minDuration = f.durationMinutes;
+    if (f.price < minPrice) minPrice = f.price;
   });
 
-  if (!Number.isFinite(minPrice)) minPrice = null;
-  if (!Number.isFinite(minDuration)) minDuration = null;
+  const userAlliance = constraints.preferAlliance;
 
-  return { minPrice, minDuration };
-}
+  return flights.map((f) => {
+    const baselineScore = Number(f.baselineScore || 0);
 
-function buildBaselineBadges(flight, index, ctx) {
-  const badges = [];
-  const price = Number(flight.totalPrice);
-  const dur = Number(flight.duration_minutes);
-  const stops = Number(flight.num_stops || 0);
-  const red = Number(flight.red_eye || 0);
+    // Normalized route popularity 0–1
+    const pop = Number(f.routePopularity || 0);
+    const popNorm = maxRoutePop > 0 ? pop / maxRoutePop : 0;
 
-  if (index === 0) badges.push("Top pick");
-  if (ctx.minPrice !== null && price === ctx.minPrice) badges.push("Cheapest");
-  if (ctx.minDuration !== null && dur === ctx.minDuration)
-    badges.push("Fastest");
-  if (stops === 0) badges.push("Non-stop");
-  if (red === 1) badges.push("Red-eye");
+    // Normalized degree 0–1
+    const degSum = Number(f.departureDegree || 0) + Number(f.arrivalDegree || 0);
+    const degNorm = maxDeg > 0 ? degSum / maxDeg : 0;
 
-  return badges;
-}
-
-function buildBaselineExplanation(flight, constraints) {
-  const parts = [];
-
-  const price = Number(flight.totalPrice);
-  if (
-    constraints.maxPrice !== null &&
-    Number.isFinite(price) &&
-    price <= constraints.maxPrice
-  ) {
-    parts.push(`within your max price (${price.toFixed(0)})`);
-  }
-
-  const stops = Number(flight.num_stops || 0);
-  if (constraints.maxStops !== 3 && stops <= constraints.maxStops) {
-    parts.push(`${stops} stop(s) within your limit`);
-  }
-
-  if (constraints.avoidRedEye && Number(flight.red_eye || 0) === 0) {
-    parts.push("avoids red-eye flights");
-  }
-
-  if (parts.length === 0) {
-    return "Ranked by baseline model score using price, duration, and stops.";
-  }
-
-  return (
-    "Ranked by baseline model score and because it " + parts.join(", ") + "."
-  );
-}
-
-export function rankBaseline({ state, origin, dest, constraints }) {
-  const candidates = getCandidatesForRoute(state, origin, dest);
-  if (!candidates.length) {
-    return [];
-  }
-
-  const filtered = applyHardConstraints(candidates, constraints);
-  const ctx = computeContextStats(filtered);
-
-  const sorted = [...filtered].sort((a, b) => {
-    const sa = Number(a.score || 0);
-    const sb = Number(b.score || 0);
-    return sb - sa;
-  });
-
-  const topK = sorted.slice(0, 10);
-
-  return topK.map((flight, index) => ({
-    flight,
-    explanation: buildBaselineExplanation(flight, constraints),
-    badges: buildBaselineBadges(flight, index, ctx),
-  }));
-}
-
-// ---------- Enhanced ranking (RouteGraph-RAG) ----------
-
-function computeGraphRaw(flight, state) {
-  const key = `${flight.origin}-${flight.dest}`;
-  const stats = state.routeGraph[key];
-  if (!stats) return 0;
-
-  const pop = Number(stats.route_popularity || 0);
-  const depDeg = Number(stats.departure_degree || 0);
-  const arrDeg = Number(stats.arrival_degree || 0);
-
-  return pop + 0.1 * depDeg + 0.1 * arrDeg;
-}
-
-function computeReviewRaw(flight, state) {
-  const carrier = flight.carrier;
-  if (!carrier) return 0;
-  const stats = state.reviewStats[carrier];
-  if (!stats) return 0;
-
-  const rating = Number(stats.avg_rating || 0);
-  const numReviews = Number(stats.num_reviews || 0);
-
-  const ratingNorm = rating / 5;
-  const volumeBoost = Math.log1p(numReviews);
-
-  return ratingNorm + 0.1 * volumeBoost;
-}
-
-function buildEnhancedBadges(flight, index, ctx, scoreParts) {
-  const badges = [];
-  const price = Number(flight.totalPrice);
-  const dur = Number(flight.duration_minutes);
-  const stops = Number(flight.num_stops || 0);
-
-  if (index === 0) badges.push("Top hybrid pick");
-  if (ctx.minPrice !== null && price === ctx.minPrice) badges.push("Cheapest");
-  if (ctx.minDuration !== null && dur === ctx.minDuration)
-    badges.push("Fastest");
-  if (stops === 0) badges.push("Non-stop");
-
-  if (scoreParts.graphNorm > 0.6) badges.push("Graph-favoured");
-  if (scoreParts.reviewNorm > 0.6) badges.push("Better reviews");
-
-  return badges;
-}
-
-function buildEnhancedExplanation(flight, constraints, scoreParts) {
-  const bits = [];
-
-  if (scoreParts.baseNorm >= 0.6) {
-    bits.push("strong baseline score");
-  }
-  if (scoreParts.graphNorm >= 0.6) {
-    bits.push("popular or well-connected route");
-  }
-  if (scoreParts.reviewNorm >= 0.6) {
-    bits.push("airline has comparatively better reviews");
-  }
-
-  const alliancePref = constraints.preferredAlliance;
-  const carrierAlliance = CARRIER_ALLIANCE[flight.carrier] || "None";
-  if (alliancePref && carrierAlliance === alliancePref) {
-    bits.push(`matches your ${alliancePref} alliance preference`);
-  }
-
-  if (!bits.length) {
-    return "Ranked by a hybrid of baseline score, route-graph features, and review stats.";
-  }
-
-  return (
-    "Recommended because of " +
-    bits.join(", ") +
-    ", combined in the hybrid score."
-  );
-}
-
-export function rankEnhanced({ state, origin, dest, constraints }) {
-  const candidates = getCandidatesForRoute(state, origin, dest);
-  if (!candidates.length) {
-    return [];
-  }
-
-  const filtered = applyHardConstraints(candidates, constraints);
-  const ctx = computeContextStats(filtered);
-
-  const baseRaw = filtered.map((f) => Number(f.score || 0));
-  const graphRaw = filtered.map((f) => computeGraphRaw(f, state));
-  const reviewRaw = filtered.map((f) => computeReviewRaw(f, state));
-
-  const [baseMin, baseMax] = getMinMax(baseRaw);
-  const [graphMin, graphMax] = getMinMax(graphRaw);
-  const [reviewMin, reviewMax] = getMinMax(reviewRaw);
-
-  const scored = filtered.map((flight, idx) => {
-    const baseNorm = normalizeValue(baseRaw[idx], baseMin, baseMax);
-    const graphNorm = normalizeValue(graphRaw[idx], graphMin, graphMax);
-    const reviewNorm = normalizeValue(reviewRaw[idx], reviewMin, reviewMax);
-
-    let allianceBonus = 0;
-    const pref = constraints.preferredAlliance;
-    const carrierAlliance = CARRIER_ALLIANCE[flight.carrier] || "None";
-    if (pref && carrierAlliance === pref) {
-      allianceBonus = 0.08;
+    // Review rating: center around 3, scale to roughly [-1, +1]
+    let ratingNorm = 0;
+    if (f.reviewAvgRating != null) {
+      // Assuming rating is roughly 1..5
+      ratingNorm = (Number(f.reviewAvgRating) - 3) / 2;
     }
 
+    // Alliance preference bonus: 0 or 1
+    let allianceBonus = 0;
+    if (
+      userAlliance &&
+      userAlliance !== "No preference" &&
+      f.alliance === userAlliance
+    ) {
+      allianceBonus = 1;
+    }
+
+    // Combine into a hybrid score.
+    // Weights are heuristic but small enough to keep baseline dominant.
     const hybridScore =
-      0.6 * baseNorm + 0.25 * graphNorm + 0.15 * reviewNorm + allianceBonus;
+      baselineScore +
+      0.3 * popNorm +
+      0.2 * degNorm +
+      0.4 * ratingNorm +
+      0.5 * allianceBonus;
+
+    // Flags for UI (fastest / cheapest)
+    const isFastest = f.durationMinutes === minDuration;
+    const isCheapest = f.price === minPrice;
 
     return {
-      flight,
+      ...f,
+      baselineScore,
       hybridScore,
-      baseNorm,
-      graphNorm,
-      reviewNorm,
-    };
-  });
-
-  scored.sort((a, b) => b.hybridScore - a.hybridScore);
-  const topK = scored.slice(0, 10);
-
-  return topK.map((entry, index) => {
-    const scoreParts = {
-      baseNorm: entry.baseNorm,
-      graphNorm: entry.graphNorm,
-      reviewNorm: entry.reviewNorm,
-    };
-    return {
-      flight: entry.flight,
-      explanation: buildEnhancedExplanation(
-        entry.flight,
-        constraints,
-        scoreParts
-      ),
-      badges: buildEnhancedBadges(entry.flight, index, ctx, scoreParts),
+      isFastest,
+      isCheapest
     };
   });
 }
