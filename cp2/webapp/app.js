@@ -1,29 +1,74 @@
-// app.js
-// Entry point: load data, create state, bind UI.
+// cp2/webapp/app.js
+// Entry point for the RouteGraph-RAG CP2 demo.
+// - Loads all data
+// - Initializes UI + state
+// - Handles "Recommend flights" actions
 
 import { loadAllData } from "./dataStore.js";
-import { createInitialState } from "./state.js";
-import { bindUI } from "./ui.js";
-import { rankBaseline, rankEnhanced } from "./ranking.js";
+import { initState, getCurrentConstraints } from "./state.js";
+import { getRecommendations } from "./ranking.js";
+import { initUI, renderRecommendations } from "./ui.js";
 
 async function main() {
-  try {
-    console.log("RouteGraph-RAG: loading data...");
-    const data = await loadAllData();
-    const state = createInitialState(data);
-    console.log("Data loaded, state initialised:", state);
+  // Basic hooks
+  const root = document.getElementById("app-root");
+  const loadingEl = document.getElementById("loading-indicator");
+  const errorEl = document.getElementById("error-indicator");
 
-    bindUI({
-      state,
-      rankBaseline,
-      rankEnhanced,
+  try {
+    if (loadingEl) {
+      loadingEl.style.display = "block";
+    }
+
+    // 1) Load data (flights_small, graph, reviews, carrier_metadata)
+    await loadAllData();
+
+    // 2) Init UI containers
+    initUI();
+
+    // 3) Init state and wiring to "Recommend" button
+    initState(handleRecommend);
+
+    // 4) Optionally: run one recommendation on initial load
+    const initialConstraints = getCurrentConstraints();
+    const initialResult = getRecommendations(initialConstraints);
+    renderRecommendations({
+      baseline: initialResult.baseline,
+      hybrid: initialResult.hybrid,
+      hardConstraintsSatisfied: initialResult.hardConstraintsSatisfied,
+      constraints: initialConstraints
     });
+
+    if (loadingEl) {
+      loadingEl.style.display = "none";
+    }
+    if (errorEl) {
+      errorEl.style.display = "none";
+    }
   } catch (err) {
-    console.error("Failed to initialise app:", err);
-    alert(
-      "Error loading RouteGraph-RAG data. Check console for details and that JSON files exist in ../data/."
-    );
+    console.error("[app] Failed to initialize app:", err);
+    if (loadingEl) loadingEl.style.display = "none";
+    if (errorEl) {
+      errorEl.style.display = "block";
+      errorEl.textContent =
+        "Something went wrong while loading data. Please refresh the page.";
+    }
   }
 }
 
+/**
+ * Called whenever the user clicks "Recommend flights" in the UI.
+ */
+function handleRecommend(constraints) {
+  const result = getRecommendations(constraints);
+
+  renderRecommendations({
+    baseline: result.baseline,
+    hybrid: result.hybrid,
+    hardConstraintsSatisfied: result.hardConstraintsSatisfied,
+    constraints
+  });
+}
+
+// Run once DOM is ready
 document.addEventListener("DOMContentLoaded", main);
