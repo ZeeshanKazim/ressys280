@@ -139,19 +139,27 @@ function enrichFlight(flight) {
 
 /**
  * Compute hybrid scores for a list of flights, taking into account:
- *  - baseline score
+ *  - baseline score (normalized within this route)
  *  - route popularity / degrees
  *  - review rating
  *  - alliance preference
+ *
+ * The weights are tuned so that:
+ *  - Baseline still matters a lot
+ *  - But alliance + reviews can change ordering in realistic cases
  */
 function computeHybridScores(flights, constraints) {
   if (!flights.length) return [];
 
-  // Route-graph normalization
+  const userAlliance = constraints.preferAlliance;
+
+  // Pre-compute min / max for normalization
   let maxRoutePop = 0;
   let maxDeg = 0;
   let minDuration = Infinity;
   let minPrice = Infinity;
+  let minBase = Infinity;
+  let maxBase = -Infinity;
 
   flights.forEach((f) => {
     const pop = Number(f.routePopularity || 0);
@@ -162,12 +170,22 @@ function computeHybridScores(flights, constraints) {
 
     if (f.durationMinutes < minDuration) minDuration = f.durationMinutes;
     if (f.price < minPrice) minPrice = f.price;
+
+    const base = Number(f.baselineScore || 0);
+    if (base < minBase) minBase = base;
+    if (base > maxBase) maxBase = base;
   });
 
-  const userAlliance = constraints.preferAlliance;
+  const baseRange = maxBase - minBase;
 
   return flights.map((f) => {
     const baselineScore = Number(f.baselineScore || 0);
+
+    // Baseline normalized to [0,1]
+    let baseNorm = 0.5;
+    if (baseRange > 1e-6) {
+      baseNorm = (baselineScore - minBase) / baseRange;
+    }
 
     // Normalized route popularity 0–1
     const pop = Number(f.routePopularity || 0);
@@ -177,11 +195,10 @@ function computeHybridScores(flights, constraints) {
     const degSum = Number(f.departureDegree || 0) + Number(f.arrivalDegree || 0);
     const degNorm = maxDeg > 0 ? degSum / maxDeg : 0;
 
-    // Review rating: center around 3, scale to roughly [-1, +1]
+    // Review rating: roughly 1..5, center at 3 → [-1,1], then scaled
     let ratingNorm = 0;
     if (f.reviewAvgRating != null) {
-      // Assuming rating is roughly 1..5
-      ratingNorm = (Number(f.reviewAvgRating) - 3) / 2;
+      ratingNorm = (Number(f.reviewAvgRating) - 3) / 2; // [-1, +1]
     }
 
     // Alliance preference bonus: 0 or 1
@@ -194,16 +211,15 @@ function computeHybridScores(flights, constraints) {
       allianceBonus = 1;
     }
 
-    // Combine into a hybrid score.
-    // Weights are heuristic but small enough to keep baseline dominant.
+    // Hybrid score: weights chosen to give visible impact
+    // on alliance + reviews without totally ignoring baseline.
     const hybridScore =
-      baselineScore +
-      0.3 * popNorm +
-      0.2 * degNorm +
-      0.4 * ratingNorm +
-      0.5 * allianceBonus;
+      1.0 * baseNorm + // main backbone
+      0.35 * popNorm +
+      0.25 * degNorm +
+      0.6 * ratingNorm +
+      (userAlliance && userAlliance !== "No preference" ? 1.0 * allianceBonus : 0);
 
-    // Flags for UI (fastest / cheapest)
     const isFastest = f.durationMinutes === minDuration;
     const isCheapest = f.price === minPrice;
 
