@@ -91,7 +91,7 @@ function renderBanner(hardConstraintsSatisfied, constraints) {
       "No flights matched all of your hard constraints. Showing closest available options instead.";
     bannerEl.appendChild(div);
   } else {
-    // Optionally show a subtle “constraints applied” message or nothing
+    // no banner if fully satisfied
   }
 }
 
@@ -165,11 +165,15 @@ function createFlightCard({ flight, rank, columnType, constraints }) {
 
   const priceEl = document.createElement("div");
   priceEl.className = "flight-price";
-  priceEl.textContent = `Price: ${formatPrice(flight.price)}`;
+  priceEl.innerHTML = `<span class="icon">💰</span>${formatPrice(
+    flight.price
+  )}`;
 
   const durEl = document.createElement("div");
   durEl.className = "flight-duration";
-  durEl.textContent = `Duration: ${formatDuration(flight.durationMinutes)}`;
+  durEl.innerHTML = `<span class="icon">⏱</span>${formatDuration(
+    flight.durationMinutes
+  )}`;
 
   const stopsEl = document.createElement("div");
   stopsEl.className = "flight-stops";
@@ -184,7 +188,9 @@ function createFlightCard({ flight, rank, columnType, constraints }) {
 
   const depEl = document.createElement("div");
   depEl.className = "flight-departure";
-  depEl.textContent = `Departure: ${formatDateTime(flight.departureIso)}`;
+  depEl.innerHTML = `<span class="icon">🛫</span>${formatDateTime(
+    flight.departureIso
+  )}`;
 
   const airlineEl = document.createElement("div");
   airlineEl.className = "flight-airline";
