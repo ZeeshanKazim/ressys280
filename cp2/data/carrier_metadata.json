@@ -1,0 +1,46 @@
+{
+  "SU": {
+    "name": "Aeroflot Russian Airlines",
+    "alliance": "SkyTeam"
+  },
+  "S7": {
+    "name": "S7 Siberia Airlines",
+    "alliance": "Oneworld"
+  },
+  "DP": {
+    "name": "Pobeda Airlines",
+    "alliance": "Star Alliance"
+  },
+  "TK": {
+    "name": "Turkish Airlines",
+    "alliance": "Star Alliance"
+  },
+  "U6": {
+    "name": "Ural Airlines",
+    "alliance": "None"
+  },
+  "CZ": {
+    "name": "China Southern Airlines",
+    "alliance": "SkyTeam"
+  },
+  "HY": {
+    "name": "Uzbekistan Airways",
+    "alliance": "None"
+  },
+  "J2": {
+    "name": "Azerbaijan Airlines",
+    "alliance": "None"
+  },
+  "N4": {
+    "name": "Nordwind Airlines",
+    "alliance": "None"
+  },
+  "DV": {
+    "name": "SCAT Airlines",
+    "alliance": "None"
+  },
+  "RT": {
+    "name": "UVT Aero",
+    "alliance": "None"
+  }
+}
