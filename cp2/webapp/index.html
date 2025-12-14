@@ -16,9 +16,7 @@
             Constraint-aware flight recommendations with route-graph and review signals.
           </p>
         </div>
-        <div class="header-pill">
-          Flight recommender demo
-        </div>
+        <!-- header pill removed per professor feedback -->
       </header>
 
       <!-- Loading / error indicators -->
@@ -139,6 +137,7 @@
               class="sort-filter-panel"
               style="display: none;"
             >
+              <!-- Price range -->
               <div class="filter-row">
                 <label for="price-range">Max price (₽)</label>
                 <input
@@ -152,6 +151,76 @@
                   <span id="price-range-label">No max limit</span>
                 </div>
               </div>
+
+              <!-- Departure time buckets -->
+              <div class="filter-row">
+                <label>Departure time</label>
+                <div class="time-bucket-row">
+                  <button
+                    type="button"
+                    class="time-chip"
+                    id="dep-bucket-early"
+                  >
+                    Before 6AM
+                  </button>
+                  <button
+                    type="button"
+                    class="time-chip"
+                    id="dep-bucket-morning"
+                  >
+                    6AM–12 Noon
+                  </button>
+                  <button
+                    type="button"
+                    class="time-chip"
+                    id="dep-bucket-afternoon"
+                  >
+                    12 Noon–6PM
+                  </button>
+                  <button
+                    type="button"
+                    class="time-chip"
+                    id="dep-bucket-evening"
+                  >
+                    After 6PM
+                  </button>
+                </div>
+              </div>
+
+              <!-- Arrival time buckets -->
+              <div class="filter-row">
+                <label>Arrival time</label>
+                <div class="time-bucket-row">
+                  <button
+                    type="button"
+                    class="time-chip"
+                    id="arr-bucket-early"
+                  >
+                    Before 6AM
+                  </button>
+                  <button
+                    type="button"
+                    class="time-chip"
+                    id="arr-bucket-morning"
+                  >
+                    6AM–12 Noon
+                  </button>
+                  <button
+                    type="button"
+                    class="time-chip"
+                    id="arr-bucket-afternoon"
+                  >
+                    12 Noon–6PM
+                  </button>
+                  <button
+                    type="button"
+                    class="time-chip"
+                    id="arr-bucket-evening"
+                  >
+                    After 6PM
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -159,7 +228,7 @@
           <div id="constraints-banner" class="constraints-banner"></div>
 
           <div class="results-grid">
-            <!-- Baseline column -->
+            <!-- Standard column -->
             <section class="results-column">
               <h2 class="results-title">
                 Standard recommendations
@@ -170,7 +239,7 @@
               <div id="baseline-results" class="results-list"></div>
             </section>
 
-            <!-- Hybrid column -->
+            <!-- Smart column -->
             <section class="results-column">
               <h2 class="results-title">
                 Smart recommendations
