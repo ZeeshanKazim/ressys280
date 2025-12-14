@@ -48,16 +48,6 @@ body {
   opacity: 0.9;
 }
 
-.header-pill {
-  border-radius: 999px;
-  padding: 0.45rem 1.2rem;
-  border: 1px solid rgba(239, 246, 255, 0.6);
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  background: rgba(15, 23, 42, 0.35);
-}
-
 /* ---------- Status messages ---------- */
 
 .status-message {
@@ -118,12 +108,6 @@ body {
   gap: 0.25rem;
 }
 
-.form-field-inline {
-  flex-direction: row;
-  align-items: center;
-  gap: 0.5rem;
-}
-
 label {
   font-size: 0.9rem;
   font-weight: 500;
@@ -145,6 +129,8 @@ select:focus {
   box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.2);
   background: #ffffff;
 }
+
+/* Buttons */
 
 .form-actions {
   margin-top: 0.5rem;
@@ -259,6 +245,7 @@ select:focus {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
+  margin-top: 0.3rem;
 }
 
 #price-range {
@@ -268,6 +255,30 @@ select:focus {
 .filter-range-label {
   font-size: 0.8rem;
   color: #6b7280;
+}
+
+/* Time-of-day chips */
+
+.time-bucket-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.time-chip {
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  padding: 0.25rem 0.9rem;
+  font-size: 0.8rem;
+  background: #f9fafb;
+  color: #374151;
+  cursor: pointer;
+}
+
+.time-chip-active {
+  background: #2563eb;
+  border-color: #1d4ed8;
+  color: #eff6ff;
 }
 
 /* ---------- Results grid ---------- */
@@ -290,6 +301,7 @@ select:focus {
   border-radius: 1rem;
   padding: 1.25rem 1.5rem 1.5rem;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.06);
+  overflow-x: auto; /* allow horizontal scroll instead of overflow */
 }
 
 .results-title {
@@ -315,6 +327,7 @@ select:focus {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.85rem;
+  table-layout: fixed; /* keeps columns within card width */
 }
 
 .flight-table thead {
@@ -329,13 +342,19 @@ select:focus {
   vertical-align: middle;
 }
 
+/* Narrow first column for rank */
 .flight-table th:first-child,
 .flight-table td:first-child {
-  width: 3%;
+  width: 8%;
 }
 
 .flight-table tbody tr:hover {
   background: #f9fafb;
+}
+
+/* Tags cell can wrap content */
+.tags-cell {
+  width: 26%;
 }
 
 /* ---------- Badges / tags ---------- */
