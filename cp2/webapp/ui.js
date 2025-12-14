@@ -1,7 +1,7 @@
 // cp2/webapp/ui.js
 // Rendering logic for the recommendations:
 //  - shows a banner when hard constraints can't be fully satisfied
-//  - renders baseline and hybrid result columns with explanatory text
+//  - renders baseline and hybrid result columns as tables
 
 let bannerEl;
 let baselineContainer;
@@ -27,10 +27,10 @@ export function initUI() {
  *  - baseline: Array<flight>
  *  - hybrid: Array<flight>
  *  - hardConstraintsSatisfied: boolean
- *  - constraints: { origin, dest, maxPrice, maxStops, avoidRedEye, preferAlliance }
+ *  - constraints: { origin, dest, maxPrice, maxStops, preferAlliance }
  */
 export function renderRecommendations(opts) {
-  const { baseline, hybrid, hardConstraintsSatisfied, constraints } = opts;
+  const { baseline, hybrid, hardConstraintsSatisfied } = opts;
 
   if (!baselineContainer || !hybridContainer) {
     initUI(); // try again if not initialized
@@ -41,42 +41,16 @@ export function renderRecommendations(opts) {
   hybridContainer.innerHTML = "";
 
   // Banner
-  renderBanner(hardConstraintsSatisfied, constraints);
+  renderBanner(hardConstraintsSatisfied);
 
-  // No results case
-  if (!baseline.length && !hybrid.length) {
-    const msg = document.createElement("div");
-    msg.className = "no-results";
-    msg.textContent = "No flights found for this route.";
-    baselineContainer.appendChild(msg);
-    hybridContainer.appendChild(msg.cloneNode(true));
-    return;
-  }
+  // Baseline table
+  renderTable(baselineContainer, baseline, "baseline");
 
-  // Render baseline
-  baseline.forEach((flight, idx) => {
-    const card = createFlightCard({
-      flight,
-      rank: idx + 1,
-      columnType: "baseline",
-      constraints
-    });
-    baselineContainer.appendChild(card);
-  });
-
-  // Render hybrid
-  hybrid.forEach((flight, idx) => {
-    const card = createFlightCard({
-      flight,
-      rank: idx + 1,
-      columnType: "hybrid",
-      constraints
-    });
-    hybridContainer.appendChild(card);
-  });
+  // Hybrid table
+  renderTable(hybridContainer, hybrid, "hybrid");
 }
 
-function renderBanner(hardConstraintsSatisfied, constraints) {
+function renderBanner(hardConstraintsSatisfied) {
   if (!bannerEl) {
     bannerEl = document.getElementById("constraints-banner");
     if (!bannerEl) return;
@@ -90,127 +64,133 @@ function renderBanner(hardConstraintsSatisfied, constraints) {
     div.textContent =
       "No flights matched all of your hard constraints. Showing closest available options instead.";
     bannerEl.appendChild(div);
-  } else {
-    // no banner if fully satisfied
   }
 }
 
-function createFlightCard({ flight, rank, columnType, constraints }) {
-  const card = document.createElement("article");
-  card.className = "flight-card";
-
-  // Header: rank + route
-  const header = document.createElement("div");
-  header.className = "flight-card-header";
-
-  const rankEl = document.createElement("div");
-  rankEl.className = "flight-rank";
-  rankEl.textContent = `#${rank}`;
-
-  const titleEl = document.createElement("div");
-  titleEl.className = "flight-title";
-  titleEl.textContent = `${flight.carrier} ${flight.origin} → ${flight.dest}`;
-
-  header.appendChild(rankEl);
-  header.appendChild(titleEl);
-
-  // Badges
-  const badgesEl = document.createElement("div");
-  badgesEl.className = "flight-badges";
-
-  if (rank === 1) {
-    const topBadge = document.createElement("span");
-    topBadge.className = "badge badge-primary";
-    topBadge.textContent =
-      columnType === "baseline" ? "Top pick" : "Top hybrid pick";
-    badgesEl.appendChild(topBadge);
+function renderTable(container, flights, columnType) {
+  if (!flights || flights.length === 0) {
+    const msg = document.createElement("div");
+    msg.className = "no-results";
+    msg.textContent = "No flights found for this route.";
+    container.appendChild(msg);
+    return;
   }
 
-  if (flight.isFastest) {
-    const b = document.createElement("span");
-    b.className = "badge badge-neutral";
-    b.textContent = "Fastest";
-    badgesEl.appendChild(b);
-  }
+  const table = document.createElement("table");
+  table.className = "flight-table";
 
-  if (flight.isCheapest) {
-    const b = document.createElement("span");
-    b.className = "badge badge-neutral";
-    b.textContent = "Cheapest";
-    badgesEl.appendChild(b);
-  }
+  const thead = document.createElement("thead");
+  const headerRow = document.createElement("tr");
 
-  if (flight.stops === 0) {
-    const b = document.createElement("span");
-    b.className = "badge badge-neutral";
-    b.textContent = "Non-stop";
-    badgesEl.appendChild(b);
-  }
+  const headers = [
+    "#",
+    "Airline",
+    "Route",
+    "Departure",
+    "Duration",
+    "Stops",
+    "Price",
+    "Tags"
+  ];
 
-  if (flight.redEye) {
-    const b = document.createElement("span");
-    b.className = "badge badge-warning";
-    b.textContent = "Red-eye";
-    badgesEl.appendChild(b);
-  }
+  headers.forEach((h) => {
+    const th = document.createElement("th");
+    th.textContent = h;
+    headerRow.appendChild(th);
+  });
 
-  header.appendChild(badgesEl);
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
 
-  // Body: details
-  const body = document.createElement("div");
-  body.className = "flight-card-body";
+  const tbody = document.createElement("tbody");
 
-  const topRow = document.createElement("div");
-  topRow.className = "flight-top-row";
+  flights.forEach((flight, idx) => {
+    const tr = document.createElement("tr");
 
-  const priceEl = document.createElement("div");
-  priceEl.className = "flight-price";
-  priceEl.innerHTML = `<span class="icon">💰</span>${formatPrice(
-    flight.price
-  )}`;
+    // Rank
+    const rankTd = document.createElement("td");
+    rankTd.textContent = `#${idx + 1}`;
+    tr.appendChild(rankTd);
 
-  const durEl = document.createElement("div");
-  durEl.className = "flight-duration";
-  durEl.innerHTML = `<span class="icon">⏱</span>${formatDuration(
-    flight.durationMinutes
-  )}`;
+    // Airline
+    const airlineTd = document.createElement("td");
+    airlineTd.textContent = flight.airlineName || flight.carrier;
+    tr.appendChild(airlineTd);
 
-  const stopsEl = document.createElement("div");
-  stopsEl.className = "flight-stops";
-  stopsEl.textContent = `Stops: ${flight.stops}`;
+    // Route
+    const routeTd = document.createElement("td");
+    routeTd.textContent = `${flight.origin} → ${flight.dest}`;
+    tr.appendChild(routeTd);
 
-  topRow.appendChild(priceEl);
-  topRow.appendChild(durEl);
-  topRow.appendChild(stopsEl);
+    // Departure
+    const depTd = document.createElement("td");
+    depTd.textContent = formatDateTime(flight.departureIso);
+    tr.appendChild(depTd);
 
-  const midRow = document.createElement("div");
-  midRow.className = "flight-mid-row";
+    // Duration
+    const durTd = document.createElement("td");
+    durTd.textContent = formatDuration(flight.durationMinutes);
+    tr.appendChild(durTd);
 
-  const depEl = document.createElement("div");
-  depEl.className = "flight-departure";
-  depEl.innerHTML = `<span class="icon">🛫</span>${formatDateTime(
-    flight.departureIso
-  )}`;
+    // Stops
+    const stopsTd = document.createElement("td");
+    const stops = Number(flight.stops || 0);
+    if (stops === 0) {
+      stopsTd.textContent = "Non-stop";
+    } else if (stops === 1) {
+      stopsTd.textContent = "1 stop";
+    } else {
+      stopsTd.textContent = `${stops} stops`;
+    }
+    tr.appendChild(stopsTd);
 
-  const airlineEl = document.createElement("div");
-  airlineEl.className = "flight-airline";
-  airlineEl.textContent = `${flight.airlineName} (${flight.alliance})`;
+    // Price
+    const priceTd = document.createElement("td");
+    priceTd.textContent = `${formatPrice(flight.price)} ₽`;
+    tr.appendChild(priceTd);
 
-  midRow.appendChild(depEl);
-  midRow.appendChild(airlineEl);
+    // Tags
+    const tagsTd = document.createElement("td");
+    const tagsContainer = document.createElement("div");
+    tagsContainer.className = "tags-container";
 
-  // Explanation
-  const expl = document.createElement("div");
-  expl.className = "flight-explanation";
-  expl.textContent = buildExplanation(flight, columnType, constraints);
+    if (idx === 0) {
+      const topBadge = document.createElement("span");
+      topBadge.className = "badge badge-primary";
+      topBadge.textContent =
+        columnType === "baseline" ? "Top pick" : "Top smart pick";
+      tagsContainer.appendChild(topBadge);
+    }
 
-  body.appendChild(topRow);
-  body.appendChild(midRow);
-  body.appendChild(expl);
+    if (flight.isCheapest) {
+      const b = document.createElement("span");
+      b.className = "badge badge-neutral";
+      b.textContent = "Cheapest";
+      tagsContainer.appendChild(b);
+    }
 
-  card.appendChild(header);
-  card.appendChild(body);
-  return card;
+    if (flight.isFastest) {
+      const b = document.createElement("span");
+      b.className = "badge badge-neutral";
+      b.textContent = "Fastest";
+      tagsContainer.appendChild(b);
+    }
+
+    if (Number(flight.stops || 0) === 0) {
+      const b = document.createElement("span");
+      b.className = "badge badge-neutral";
+      b.textContent = "Non-stop";
+      tagsContainer.appendChild(b);
+    }
+
+    tagsTd.appendChild(tagsContainer);
+    tr.appendChild(tagsTd);
+
+    tbody.appendChild(tr);
+  });
+
+  table.appendChild(tbody);
+  container.appendChild(table);
 }
 
 function formatPrice(p) {
@@ -232,92 +212,9 @@ function formatDateTime(iso) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString(undefined, {
-    year: "numeric",
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit"
   });
-}
-
-/**
- * Build explanation text for a flight card.
- */
-function buildExplanation(flight, columnType, constraints) {
-  if (columnType === "baseline") {
-    return buildBaselineExplanation(flight, constraints);
-  }
-  return buildHybridExplanation(flight, constraints);
-}
-
-function buildBaselineExplanation(flight, constraints) {
-  const parts = [];
-
-  parts.push("Ranked by baseline model score using price, duration, and stops");
-
-  if (constraints.maxPrice != null && flight.price <= constraints.maxPrice) {
-    parts.push(`within your max price ${constraints.maxPrice}`);
-  }
-
-  if (constraints.maxStops != null && flight.stops <= constraints.maxStops) {
-    parts.push(`within your max ${constraints.maxStops} stop(s)`);
-  }
-
-  if (constraints.avoidRedEye) {
-    if (!flight.redEye) {
-      parts.push("avoids red-eye flights as requested");
-    } else {
-      parts.push(
-        "red-eye flight shown because no better options fully met your constraints"
-      );
-    }
-  }
-
-  return sentenceJoin(parts) + ".";
-}
-
-function buildHybridExplanation(flight, constraints) {
-  const parts = [];
-
-  parts.push("Recommended by hybrid score combining baseline model");
-
-  // Route graph
-  if (flight.routePopularity != null && flight.routePopularity > 0) {
-    parts.push("route popularity");
-  }
-  if (
-    (flight.departureDegree != null && flight.departureDegree > 0) ||
-    (flight.arrivalDegree != null && flight.arrivalDegree > 0)
-  ) {
-    parts.push("network connectivity (RouteGraph degrees)");
-  }
-
-  // Reviews
-  if (flight.reviewAvgRating != null) {
-    const rating = flight.reviewAvgRating.toFixed(1);
-    parts.push(`airline reviews around ${rating}/5`);
-  }
-
-  // Alliance
-  if (
-    constraints.preferAlliance &&
-    constraints.preferAlliance !== "No preference"
-  ) {
-    if (flight.alliance === constraints.preferAlliance) {
-      parts.push(`${flight.alliance} alliance matching your preference`);
-    } else {
-      parts.push(
-        `does not match your preferred alliance (${constraints.preferAlliance})`
-      );
-    }
-  }
-
-  return sentenceJoin(parts) + ".";
-}
-
-function sentenceJoin(parts) {
-  if (!parts.length) return "";
-  if (parts.length === 1) return parts[0];
-  const [first, ...rest] = parts;
-  return first + " and " + rest.join(", ");
 }
