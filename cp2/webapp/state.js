@@ -1,5 +1,5 @@
 // cp2/webapp/state.js
-// Reads form inputs and turns them into a clean constraints + sort/filter state.
+// Reads form inputs and turns them into constraints + sort/filter state.
 // Also populates the origin/destination dropdowns from dataStore.
 
 import {
@@ -25,7 +25,13 @@ let sortRadios;
 let priceRangeInput;
 let priceRangeLabel;
 
+// Time-bucket buttons
+let depBucketButtons = [];
+let arrBucketButtons = [];
+
 let currentSortBy = "model";
+let currentDepartureBucket = null; // "early" | "morning" | "afternoon" | "evening" | null
+let currentArrivalBucket = null;
 
 /**
  * Initialize UI state:
@@ -33,8 +39,6 @@ let currentSortBy = "model";
  *  - populate origin/destination selects
  *  - wire up "Recommend flights" button
  *  - setup Sort & Filters controls
- *
- * onRecommend(constraints) is called whenever user clicks the button.
  */
 export function initState(onRecommend) {
   onRecommendCallback = onRecommend;
@@ -118,6 +122,7 @@ function populateOriginAndDestination() {
  *  - tab switching (Sort by / Filters)
  *  - sort-by radio group
  *  - price range slider label
+ *  - departure/arrival time buckets
  */
 function setupSortFilterControls() {
   sortTabBtn = document.getElementById("sf-tab-sort");
@@ -168,6 +173,40 @@ function setupSortFilterControls() {
       updatePriceLabel();
     });
   }
+
+  // Time bucket buttons
+  depBucketButtons = [
+    { key: "early", el: document.getElementById("dep-bucket-early") },
+    { key: "morning", el: document.getElementById("dep-bucket-morning") },
+    { key: "afternoon", el: document.getElementById("dep-bucket-afternoon") },
+    { key: "evening", el: document.getElementById("dep-bucket-evening") }
+  ];
+
+  arrBucketButtons = [
+    { key: "early", el: document.getElementById("arr-bucket-early") },
+    { key: "morning", el: document.getElementById("arr-bucket-morning") },
+    { key: "afternoon", el: document.getElementById("arr-bucket-afternoon") },
+    { key: "evening", el: document.getElementById("arr-bucket-evening") }
+  ];
+
+  depBucketButtons.forEach(({ key, el }) => {
+    if (!el) return;
+    el.addEventListener("click", () => {
+      currentDepartureBucket =
+        currentDepartureBucket === key ? null : key;
+      updateBucketStyles();
+    });
+  });
+
+  arrBucketButtons.forEach(({ key, el }) => {
+    if (!el) return;
+    el.addEventListener("click", () => {
+      currentArrivalBucket = currentArrivalBucket === key ? null : key;
+      updateBucketStyles();
+    });
+  });
+
+  updateBucketStyles();
 }
 
 function updatePriceLabel() {
@@ -180,6 +219,26 @@ function updatePriceLabel() {
   } else {
     priceRangeLabel.textContent = `Up to ${value.toFixed(0)} ₽`;
   }
+}
+
+function updateBucketStyles() {
+  depBucketButtons.forEach(({ key, el }) => {
+    if (!el) return;
+    if (currentDepartureBucket === key) {
+      el.classList.add("time-chip-active");
+    } else {
+      el.classList.remove("time-chip-active");
+    }
+  });
+
+  arrBucketButtons.forEach(({ key, el }) => {
+    if (!el) return;
+    if (currentArrivalBucket === key) {
+      el.classList.add("time-chip-active");
+    } else {
+      el.classList.remove("time-chip-active");
+    }
+  });
 }
 
 /**
@@ -200,16 +259,6 @@ function parseMaxStops(raw) {
 
 /**
  * Read and normalize the constraints from the form.
- * Returns an object like:
- *
- * {
- *   origin: "KZN" | null,
- *   dest: "DME" | null,
- *   maxPrice: null (will be filled from filters),
- *   maxStops: 0 | 1 | 2 | null,
- *   avoidRedEye: false,
- *   preferAlliance: "No preference" | "SkyTeam" | "Star Alliance" | "Oneworld" | "None"
- * }
  */
 export function getCurrentConstraints() {
   const originValue = originSelect.value;
@@ -233,19 +282,15 @@ export function getCurrentConstraints() {
   return {
     origin,
     dest,
-    maxPrice: null, // will be applied from filter slider
+    maxPrice: null, // changed via filters
     maxStops,
-    avoidRedEye: false, // red-eye filter removed from UI
+    avoidRedEye: false,
     preferAlliance
   };
 }
 
 /**
- * Return the current sort + filter settings:
- * {
- *   sortBy: "model" | "price" | "duration",
- *   maxPrice: number | null
- * }
+ * Return the current sort + filter settings.
  */
 export function getSortFilterOptions() {
   let maxPrice = null;
@@ -259,7 +304,9 @@ export function getSortFilterOptions() {
   }
 
   return {
-    sortBy: currentSortBy,
-    maxPrice
+    sortBy: currentSortBy, // "model" | "price" | "duration"
+    maxPrice,
+    departureBucket: currentDepartureBucket,
+    arrivalBucket: currentArrivalBucket
   };
 }
