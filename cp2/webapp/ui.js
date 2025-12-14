@@ -1,7 +1,5 @@
 // cp2/webapp/ui.js
-// Rendering logic for the recommendations:
-//  - shows a banner when hard constraints can't be fully satisfied
-//  - renders baseline and hybrid result columns as tables
+// Rendering logic for the recommendations: banner + two tables.
 
 let bannerEl;
 let baselineContainer;
@@ -21,32 +19,21 @@ export function initUI() {
 }
 
 /**
- * Render both baseline and hybrid columns.
- *
- * @param {Object} opts
- *  - baseline: Array<flight>
- *  - hybrid: Array<flight>
- *  - hardConstraintsSatisfied: boolean
- *  - constraints: { origin, dest, maxPrice, maxStops, preferAlliance }
+ * Render both standard and smart recommendation tables.
  */
 export function renderRecommendations(opts) {
   const { baseline, hybrid, hardConstraintsSatisfied } = opts;
 
   if (!baselineContainer || !hybridContainer) {
-    initUI(); // try again if not initialized
+    initUI();
   }
 
-  // Clear containers
   baselineContainer.innerHTML = "";
   hybridContainer.innerHTML = "";
 
-  // Banner
   renderBanner(hardConstraintsSatisfied);
 
-  // Baseline table
   renderTable(baselineContainer, baseline, "baseline");
-
-  // Hybrid table
   renderTable(hybridContainer, hybrid, "hybrid");
 }
 
@@ -81,7 +68,6 @@ function renderTable(container, flights, columnType) {
 
   const thead = document.createElement("thead");
   const headerRow = document.createElement("tr");
-
   const headers = [
     "#",
     "Airline",
@@ -151,6 +137,7 @@ function renderTable(container, flights, columnType) {
 
     // Tags
     const tagsTd = document.createElement("td");
+    tagsTd.className = "tags-cell";
     const tagsContainer = document.createElement("div");
     tagsContainer.className = "tags-container";
 
