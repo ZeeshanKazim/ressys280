@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>RouteGraph-RAG · CP2 Demo</title>
+    <title>RouteGraph-RAG · Flight Recommender</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
@@ -13,11 +13,11 @@
         <div class="header-main">
           <h1 class="app-title">RouteGraph-RAG</h1>
           <p class="app-tagline">
-            Constraint-Aware Two-Tower Flight Recommender with Review-Text Signals
+            Constraint-aware flight recommendations with route-graph and review signals.
           </p>
         </div>
         <div class="header-pill">
-          CHECKPOINT 2 · CORE FUNCTIONALITY INTEGRATED
+          Flight recommender demo
         </div>
       </header>
 
@@ -46,20 +46,6 @@
               <select id="destination-select"></select>
             </div>
 
-            <!-- Max price -->
-            <div class="form-field">
-              <label for="max-price-input">Max price (₽)</label>
-              <input
-                id="max-price-input"
-                type="number"
-                min="0"
-                placeholder="e.g. 8000"
-              />
-              <small class="field-hint">
-                Amount in Russian rubles (₽). Leave blank for no price limit.
-              </small>
-            </div>
-
             <!-- Max stops -->
             <div class="form-field">
               <label for="max-stops-select">Max stops</label>
@@ -71,20 +57,9 @@
               </select>
             </div>
 
-            <!-- Avoid red-eye -->
-            <div class="form-field form-field-inline">
-              <input
-                id="avoid-redeye-checkbox"
-                type="checkbox"
-              />
-              <label for="avoid-redeye-checkbox">
-                Avoid red-eye flights
-              </label>
-            </div>
-
             <!-- Alliance preference -->
             <div class="form-field">
-              <label for="alliance-select">Prefer alliance</label>
+              <label for="alliance-select">Preferred alliance</label>
               <select id="alliance-select">
                 <option>No preference</option>
                 <option>SkyTeam</option>
@@ -92,9 +67,6 @@
                 <option>Oneworld</option>
                 <option>None</option>
               </select>
-              <small class="field-hint">
-                Hybrid model boosts flights in your preferred alliance.
-              </small>
             </div>
 
             <!-- Button -->
@@ -103,16 +75,86 @@
                 Recommend flights
               </button>
             </div>
-
-            <p class="form-footnote">
-              All scoring runs locally in your browser using precomputed
-              XGBoost scores, route-graph features, and airline review statistics.
-            </p>
           </form>
         </aside>
 
-        <!-- Right: recommendations -->
+        <!-- Right: sort / filters + recommendations -->
         <section class="results-pane">
+          <!-- Sort & Filters card -->
+          <div class="sort-filter-card">
+            <div class="sort-filter-tabs">
+              <button
+                type="button"
+                id="sf-tab-sort"
+                class="sort-filter-tab sort-filter-tab-active"
+              >
+                Sort by
+              </button>
+              <button
+                type="button"
+                id="sf-tab-filters"
+                class="sort-filter-tab"
+              >
+                Filters
+              </button>
+            </div>
+
+            <!-- Sort panel -->
+            <div id="sf-panel-sort" class="sort-filter-panel">
+              <div class="sort-row">
+                <label>
+                  <input
+                    type="radio"
+                    name="sf-sort-option"
+                    id="sf-sort-model"
+                    value="model"
+                    checked
+                  />
+                  Recommended (model ranking)
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    name="sf-sort-option"
+                    id="sf-sort-price"
+                    value="price"
+                  />
+                  Cheapest first
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    name="sf-sort-option"
+                    id="sf-sort-duration"
+                    value="duration"
+                  />
+                  Fastest first
+                </label>
+              </div>
+            </div>
+
+            <!-- Filters panel -->
+            <div
+              id="sf-panel-filters"
+              class="sort-filter-panel"
+              style="display: none;"
+            >
+              <div class="filter-row">
+                <label for="price-range">Max price (₽)</label>
+                <input
+                  type="range"
+                  id="price-range"
+                  min="0"
+                  max="80000"
+                  step="1000"
+                />
+                <div class="filter-range-label">
+                  <span id="price-range-label">No max limit</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Banner for constraint fallback -->
           <div id="constraints-banner" class="constraints-banner"></div>
 
@@ -120,10 +162,10 @@
             <!-- Baseline column -->
             <section class="results-column">
               <h2 class="results-title">
-                Baseline (XGBoost / Two-Tower)
+                Standard recommendations
               </h2>
               <p class="results-subtitle">
-                Ranked using tabular features only: price, duration, stops, and timing.
+                Ordered using core features like price, duration, and stops.
               </p>
               <div id="baseline-results" class="results-list"></div>
             </section>
@@ -131,11 +173,10 @@
             <!-- Hybrid column -->
             <section class="results-column">
               <h2 class="results-title">
-                RouteGraph-RAG (Graph + Reviews)
+                Smart recommendations
               </h2>
               <p class="results-subtitle">
-                Baseline score combined with route-graph popularity, connectivity,
-                airline reviews, and your alliance preference.
+                Uses route popularity, connectivity, reviews, and your alliance preference.
               </p>
               <div id="hybrid-results" class="results-list"></div>
             </section>
