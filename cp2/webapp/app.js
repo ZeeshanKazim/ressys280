@@ -1,13 +1,19 @@
 // cp2/webapp/app.js
-// Entry point for the RouteGraph-RAG CP2 demo.
+// Entry point for the RouteGraph-RAG demo.
 // - Loads all data
 // - Initializes UI + state
 // - Handles "Recommend flights" actions
 
 import { loadAllData } from "./dataStore.js";
-import { initState, getCurrentConstraints } from "./state.js";
+import {
+  initState,
+  getCurrentConstraints,
+  getSortFilterOptions
+} from "./state.js";
 import { getRecommendations } from "./ranking.js";
 import { initUI, renderRecommendations } from "./ui.js";
+
+let lastResult = null;
 
 async function main() {
   const loadingEl = document.getElementById("loading-indicator");
@@ -18,7 +24,7 @@ async function main() {
       loadingEl.style.display = "block";
     }
 
-    // 1) Load data (flights_small, graph, reviews, carrier_metadata)
+    // 1) Load data (flights, graph, reviews, carrier metadata)
     await loadAllData();
 
     // 2) Init UI containers
@@ -27,7 +33,6 @@ async function main() {
     // 3) Init state and wiring to "Recommend" button
     initState(handleRecommend);
 
-    // No initial auto-recommendation: user must pick origin/destination first.
     if (loadingEl) {
       loadingEl.style.display = "none";
     }
@@ -48,21 +53,57 @@ async function main() {
 /**
  * Called whenever the user clicks "Recommend flights" in the UI.
  */
-function handleRecommend(constraints) {
+function handleRecommend(constraintsFromUI) {
   // Require user to choose origin and destination
-  if (!constraints.origin || !constraints.dest) {
+  if (!constraintsFromUI.origin || !constraintsFromUI.dest) {
     window.alert("Please select both origin and destination.");
     return;
   }
 
-  const result = getRecommendations(constraints);
+  const sortFilter = getSortFilterOptions();
+  const constraints = {
+    ...constraintsFromUI,
+    maxPrice: sortFilter.maxPrice // apply price slider as hard constraint
+  };
+
+  const baseResult = getRecommendations(constraints);
+  lastResult = baseResult;
+
+  const adjusted = applySortAndFilter(baseResult, sortFilter);
 
   renderRecommendations({
-    baseline: result.baseline,
-    hybrid: result.hybrid,
-    hardConstraintsSatisfied: result.hardConstraintsSatisfied,
+    baseline: adjusted.baseline,
+    hybrid: adjusted.hybrid,
+    hardConstraintsSatisfied: baseResult.hardConstraintsSatisfied,
     constraints
   });
+}
+
+/**
+ * Apply UI-level sort & filter on top of baseline + hybrid rankings.
+ */
+function applySortAndFilter(result, sortFilter) {
+  let baseline = [...result.baseline];
+  let hybrid = [...result.hybrid];
+
+  const { sortBy, maxPrice } = sortFilter;
+
+  // Price filter (on top of model's constraints)
+  if (maxPrice != null) {
+    baseline = baseline.filter((f) => f.price <= maxPrice);
+    hybrid = hybrid.filter((f) => f.price <= maxPrice);
+  }
+
+  // Sorting
+  if (sortBy === "price") {
+    baseline.sort((a, b) => a.price - b.price);
+    hybrid.sort((a, b) => a.price - b.price);
+  } else if (sortBy === "duration") {
+    baseline.sort((a, b) => a.durationMinutes - b.durationMinutes);
+    hybrid.sort((a, b) => a.durationMinutes - b.durationMinutes);
+  } // sortBy === "model" -> keep model ranking order
+
+  return { baseline, hybrid };
 }
 
 // Run once DOM is ready
