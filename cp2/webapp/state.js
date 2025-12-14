@@ -1,5 +1,5 @@
 // cp2/webapp/state.js
-// Reads form inputs and turns them into a clean "constraints" object.
+// Reads form inputs and turns them into a clean constraints + sort/filter state.
 // Also populates the origin/destination dropdowns from dataStore.
 
 import {
@@ -9,20 +9,30 @@ import {
 
 let onRecommendCallback = null;
 
-// Cache DOM elements
+// Search form elements
 let originSelect;
 let destSelect;
-let maxPriceInput;
 let maxStopsSelect;
-let avoidRedEyeCheckbox;
 let allianceSelect;
 let recommendButton;
+
+// Sort / filter elements
+let sortTabBtn;
+let filtersTabBtn;
+let sortPanel;
+let filtersPanel;
+let sortRadios;
+let priceRangeInput;
+let priceRangeLabel;
+
+let currentSortBy = "model";
 
 /**
  * Initialize UI state:
  *  - grab DOM nodes
- *  - populate origin/destination selects (with placeholders)
+ *  - populate origin/destination selects
  *  - wire up "Recommend flights" button
+ *  - setup Sort & Filters controls
  *
  * onRecommend(constraints) is called whenever user clicks the button.
  */
@@ -31,18 +41,14 @@ export function initState(onRecommend) {
 
   originSelect = document.getElementById("origin-select");
   destSelect = document.getElementById("destination-select");
-  maxPriceInput = document.getElementById("max-price-input");
   maxStopsSelect = document.getElementById("max-stops-select");
-  avoidRedEyeCheckbox = document.getElementById("avoid-redeye-checkbox");
   allianceSelect = document.getElementById("alliance-select");
   recommendButton = document.getElementById("recommend-button");
 
   if (
     !originSelect ||
     !destSelect ||
-    !maxPriceInput ||
     !maxStopsSelect ||
-    !avoidRedEyeCheckbox ||
     !allianceSelect ||
     !recommendButton
   ) {
@@ -54,6 +60,7 @@ export function initState(onRecommend) {
   }
 
   populateOriginAndDestination();
+  setupSortFilterControls();
 
   // Hook up button
   recommendButton.addEventListener("click", (evt) => {
@@ -107,6 +114,75 @@ function populateOriginAndDestination() {
 }
 
 /**
+ * Setup Sort & Filters card:
+ *  - tab switching (Sort by / Filters)
+ *  - sort-by radio group
+ *  - price range slider label
+ */
+function setupSortFilterControls() {
+  sortTabBtn = document.getElementById("sf-tab-sort");
+  filtersTabBtn = document.getElementById("sf-tab-filters");
+  sortPanel = document.getElementById("sf-panel-sort");
+  filtersPanel = document.getElementById("sf-panel-filters");
+  priceRangeInput = document.getElementById("price-range");
+  priceRangeLabel = document.getElementById("price-range-label");
+  sortRadios = Array.from(
+    document.querySelectorAll('input[name="sf-sort-option"]')
+  );
+
+  // Tabs
+  if (sortTabBtn && filtersTabBtn && sortPanel && filtersPanel) {
+    sortTabBtn.addEventListener("click", () => {
+      sortTabBtn.classList.add("sort-filter-tab-active");
+      filtersTabBtn.classList.remove("sort-filter-tab-active");
+      sortPanel.style.display = "block";
+      filtersPanel.style.display = "none";
+    });
+
+    filtersTabBtn.addEventListener("click", () => {
+      filtersTabBtn.classList.add("sort-filter-tab-active");
+      sortTabBtn.classList.remove("sort-filter-tab-active");
+      filtersPanel.style.display = "block";
+      sortPanel.style.display = "none";
+    });
+  }
+
+  // Sort radios
+  if (sortRadios.length > 0) {
+    sortRadios.forEach((radio) => {
+      radio.addEventListener("change", () => {
+        if (radio.checked) {
+          currentSortBy = radio.value || "model";
+        }
+      });
+    });
+  }
+
+  // Price range slider
+  if (priceRangeInput && priceRangeLabel) {
+    const max = Number(priceRangeInput.max || "80000");
+    priceRangeInput.value = String(max);
+    updatePriceLabel();
+
+    priceRangeInput.addEventListener("input", () => {
+      updatePriceLabel();
+    });
+  }
+}
+
+function updatePriceLabel() {
+  if (!priceRangeInput || !priceRangeLabel) return;
+  const max = Number(priceRangeInput.max || "80000");
+  const value = Number(priceRangeInput.value || String(max));
+
+  if (!Number.isFinite(value) || value >= max) {
+    priceRangeLabel.textContent = "No max limit";
+  } else {
+    priceRangeLabel.textContent = `Up to ${value.toFixed(0)} ₽`;
+  }
+}
+
+/**
  * Parse max-stops value from the dropdown into a number or null.
  */
 function parseMaxStops(raw) {
@@ -129,9 +205,9 @@ function parseMaxStops(raw) {
  * {
  *   origin: "KZN" | null,
  *   dest: "DME" | null,
- *   maxPrice: number | null,
+ *   maxPrice: null (will be filled from filters),
  *   maxStops: 0 | 1 | 2 | null,
- *   avoidRedEye: true | false,
+ *   avoidRedEye: false,
  *   preferAlliance: "No preference" | "SkyTeam" | "Star Alliance" | "Oneworld" | "None"
  * }
  */
@@ -142,16 +218,7 @@ export function getCurrentConstraints() {
   const origin = originValue === "" ? null : originValue;
   const dest = destValue === "" ? null : destValue;
 
-  // Max price: empty -> null
-  const rawPrice = maxPriceInput.value.trim();
-  let maxPrice = null;
-  if (rawPrice !== "") {
-    const parsed = Number(rawPrice);
-    maxPrice = Number.isFinite(parsed) ? parsed : null;
-  }
-
   const maxStops = parseMaxStops(maxStopsSelect.value);
-  const avoidRedEye = Boolean(avoidRedEyeCheckbox.checked);
 
   let preferAlliance = allianceSelect.value || "No preference";
   if (
@@ -166,9 +233,33 @@ export function getCurrentConstraints() {
   return {
     origin,
     dest,
-    maxPrice,
+    maxPrice: null, // will be applied from filter slider
     maxStops,
-    avoidRedEye,
+    avoidRedEye: false, // red-eye filter removed from UI
     preferAlliance
+  };
+}
+
+/**
+ * Return the current sort + filter settings:
+ * {
+ *   sortBy: "model" | "price" | "duration",
+ *   maxPrice: number | null
+ * }
+ */
+export function getSortFilterOptions() {
+  let maxPrice = null;
+
+  if (priceRangeInput) {
+    const sliderMax = Number(priceRangeInput.max || "80000");
+    const value = Number(priceRangeInput.value || String(sliderMax));
+    if (Number.isFinite(value) && value < sliderMax) {
+      maxPrice = value;
+    }
+  }
+
+  return {
+    sortBy: currentSortBy,
+    maxPrice
   };
 }
