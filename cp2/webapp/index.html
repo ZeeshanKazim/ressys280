@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>RouteGraph-RAG · Flight Recommender</title>
+    <title>RouteGraph-RAG · Flight Recommender Demo</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
@@ -16,14 +16,17 @@
             Constraint-aware flight recommendations with route-graph and review signals.
           </p>
         </div>
-        <!-- header pill removed per professor feedback -->
       </header>
 
       <!-- Loading / error indicators -->
       <div id="loading-indicator" class="status-message" style="display: none;">
-        Loading flight data, route graph, and reviews…
+        Loading flights and precomputed scores…
       </div>
-      <div id="error-indicator" class="status-message status-error" style="display: none;">
+      <div
+        id="error-indicator"
+        class="status-message status-error"
+        style="display: none;"
+      >
         Something went wrong while loading data. Please refresh the page.
       </div>
 
@@ -31,14 +34,14 @@
         <!-- Left: search & constraints -->
         <aside class="controls-pane">
           <h2 class="pane-title">Search &amp; Constraints</h2>
-          <form class="constraints-form">
+          <form class="constraints-form" onsubmit="return false;">
             <!-- Origin -->
             <div class="form-field">
               <label for="origin-select">Origin</label>
               <select id="origin-select"></select>
             </div>
 
-            <!-- Destination -->
+            <!-- Destination (options depend on origin) -->
             <div class="form-field">
               <label for="destination-select">Destination</label>
               <select id="destination-select"></select>
@@ -48,10 +51,10 @@
             <div class="form-field">
               <label for="max-stops-select">Max stops</label>
               <select id="max-stops-select">
-                <option>Any</option>
-                <option>Non-stop only</option>
-                <option>Up to 1 stop</option>
-                <option>Up to 2 stops</option>
+                <option value="any">Any</option>
+                <option value="0">Non-stop only</option>
+                <option value="1">Up to 1 stop</option>
+                <option value="2">Up to 2 stops</option>
               </select>
             </div>
 
@@ -59,11 +62,11 @@
             <div class="form-field">
               <label for="alliance-select">Preferred alliance</label>
               <select id="alliance-select">
-                <option>No preference</option>
-                <option>SkyTeam</option>
-                <option>Star Alliance</option>
-                <option>Oneworld</option>
-                <option>None</option>
+                <option value="any">No preference</option>
+                <option value="SkyTeam">SkyTeam</option>
+                <option value="Star Alliance">Star Alliance</option>
+                <option value="Oneworld">Oneworld</option>
+                <option value="None">None</option>
               </select>
             </div>
 
@@ -73,188 +76,292 @@
                 Recommend flights
               </button>
             </div>
+
+            <p class="form-footnote">
+              All scoring runs locally in your browser using precomputed model scores,
+              route-graph features, and airline review statistics.
+            </p>
           </form>
         </aside>
 
-        <!-- Right: sort / filters + recommendations -->
+        <!-- Right: sort/filter + recommendations -->
         <section class="results-pane">
-          <!-- Sort & Filters card -->
-          <div class="sort-filter-card">
+          <!-- Sort / Filters bar -->
+          <section class="sort-filter-card">
             <div class="sort-filter-tabs">
               <button
+                id="sort-tab"
                 type="button"
-                id="sf-tab-sort"
-                class="sort-filter-tab sort-filter-tab-active"
+                class="tab-button tab-button-active"
               >
                 Sort by
               </button>
-              <button
-                type="button"
-                id="sf-tab-filters"
-                class="sort-filter-tab"
-              >
+              <button id="filters-tab" type="button" class="tab-button">
                 Filters
               </button>
             </div>
 
-            <!-- Sort panel -->
-            <div id="sf-panel-sort" class="sort-filter-panel">
-              <div class="sort-row">
-                <label>
+            <div class="sort-filter-body">
+              <!-- Sort controls -->
+              <div id="sort-controls" class="sort-section">
+                <label class="radio-inline">
                   <input
                     type="radio"
-                    name="sf-sort-option"
-                    id="sf-sort-model"
-                    value="model"
+                    name="sort-mode"
+                    id="sort-recommended"
+                    value="recommended"
                     checked
                   />
-                  Recommended (model ranking)
+                  <span>Recommended (model ranking)</span>
                 </label>
-                <label>
+                <label class="radio-inline">
                   <input
                     type="radio"
-                    name="sf-sort-option"
-                    id="sf-sort-price"
-                    value="price"
+                    name="sort-mode"
+                    id="sort-cheapest"
+                    value="cheapest"
                   />
-                  Cheapest first
+                  <span>Cheapest first</span>
                 </label>
-                <label>
+                <label class="radio-inline">
                   <input
                     type="radio"
-                    name="sf-sort-option"
-                    id="sf-sort-duration"
-                    value="duration"
+                    name="sort-mode"
+                    id="sort-fastest"
+                    value="fastest"
                   />
-                  Fastest first
+                  <span>Fastest first</span>
                 </label>
               </div>
-            </div>
 
-            <!-- Filters panel -->
-            <div
-              id="sf-panel-filters"
-              class="sort-filter-panel"
-              style="display: none;"
-            >
-              <!-- Price range -->
-              <div class="filter-row">
-                <label for="price-range">Max price (₽)</label>
-                <input
-                  type="range"
-                  id="price-range"
-                  min="0"
-                  max="80000"
-                  step="1000"
-                />
-                <div class="filter-range-label">
-                  <span id="price-range-label">No max limit</span>
+              <!-- Filter controls (simple time-of-day buckets etc.) -->
+              <div
+                id="filter-controls"
+                class="filter-section"
+                style="display: none;"
+              >
+                <div class="filter-group">
+                  <span class="filter-label">Departure time</span>
+                  <div class="chip-row">
+                    <button
+                      type="button"
+                      class="chip chip-active"
+                      data-departure-bucket="any"
+                    >
+                      Any
+                    </button>
+                    <button
+                      type="button"
+                      class="chip"
+                      data-departure-bucket="morning"
+                    >
+                      6am–12pm
+                    </button>
+                    <button
+                      type="button"
+                      class="chip"
+                      data-departure-bucket="afternoon"
+                    >
+                      12pm–6pm
+                    </button>
+                    <button
+                      type="button"
+                      class="chip"
+                      data-departure-bucket="evening"
+                    >
+                      After 6pm
+                    </button>
+                  </div>
                 </div>
-              </div>
 
-              <!-- Departure time buckets -->
-              <div class="filter-row">
-                <label>Departure time</label>
-                <div class="time-bucket-row">
-                  <button
-                    type="button"
-                    class="time-chip"
-                    id="dep-bucket-early"
-                  >
-                    Before 6AM
-                  </button>
-                  <button
-                    type="button"
-                    class="time-chip"
-                    id="dep-bucket-morning"
-                  >
-                    6AM–12 Noon
-                  </button>
-                  <button
-                    type="button"
-                    class="time-chip"
-                    id="dep-bucket-afternoon"
-                  >
-                    12 Noon–6PM
-                  </button>
-                  <button
-                    type="button"
-                    class="time-chip"
-                    id="dep-bucket-evening"
-                  >
-                    After 6PM
-                  </button>
-                </div>
-              </div>
-
-              <!-- Arrival time buckets -->
-              <div class="filter-row">
-                <label>Arrival time</label>
-                <div class="time-bucket-row">
-                  <button
-                    type="button"
-                    class="time-chip"
-                    id="arr-bucket-early"
-                  >
-                    Before 6AM
-                  </button>
-                  <button
-                    type="button"
-                    class="time-chip"
-                    id="arr-bucket-morning"
-                  >
-                    6AM–12 Noon
-                  </button>
-                  <button
-                    type="button"
-                    class="time-chip"
-                    id="arr-bucket-afternoon"
-                  >
-                    12 Noon–6PM
-                  </button>
-                  <button
-                    type="button"
-                    class="time-chip"
-                    id="arr-bucket-evening"
-                  >
-                    After 6PM
-                  </button>
+                <div class="filter-group">
+                  <span class="filter-label">Arrival time</span>
+                  <div class="chip-row">
+                    <button
+                      type="button"
+                      class="chip chip-active"
+                      data-arrival-bucket="any"
+                    >
+                      Any
+                    </button>
+                    <button
+                      type="button"
+                      class="chip"
+                      data-arrival-bucket="morning"
+                    >
+                      Before 6am
+                    </button>
+                    <button
+                      type="button"
+                      class="chip"
+                      data-arrival-bucket="day"
+                    >
+                      6am–6pm
+                    </button>
+                    <button
+                      type="button"
+                      class="chip"
+                      data-arrival-bucket="evening"
+                    >
+                      After 6pm
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          </section>
 
           <!-- Banner for constraint fallback -->
           <div id="constraints-banner" class="constraints-banner"></div>
 
+          <!-- Two recommendation tables -->
           <div class="results-grid">
-            <!-- Standard column -->
+            <!-- Baseline column -->
             <section class="results-column">
-              <h2 class="results-title">
-                Standard recommendations
-              </h2>
+              <h2 class="results-title">Standard recommendations</h2>
               <p class="results-subtitle">
                 Ordered using core features like price, duration, and stops.
               </p>
-              <div id="baseline-results" class="results-list"></div>
+
+              <div class="table-wrapper">
+                <table class="flights-table" aria-label="Baseline recommendations">
+                  <thead>
+                    <tr>
+                      <th scope="col">#</th>
+                      <th scope="col">Airline</th>
+                      <th scope="col">Route</th>
+                      <th scope="col">Departure</th>
+                      <th scope="col">Duration</th>
+                      <th scope="col">Stops</th>
+                      <th scope="col">Price (₽)</th>
+                      <th scope="col">Tags</th>
+                    </tr>
+                  </thead>
+                  <tbody id="baseline-results"></tbody>
+                </table>
+              </div>
             </section>
 
-            <!-- Smart column -->
+            <!-- Hybrid column -->
             <section class="results-column">
-              <h2 class="results-title">
-                Smart recommendations
-              </h2>
+              <h2 class="results-title">Smart recommendations</h2>
               <p class="results-subtitle">
-                Uses route popularity, connectivity, reviews, and your alliance preference.
+                Uses route popularity, connectivity, reviews, and your alliance
+                preference.
               </p>
-              <div id="hybrid-results" class="results-list"></div>
+
+              <div class="table-wrapper">
+                <table class="flights-table" aria-label="Hybrid recommendations">
+                  <thead>
+                    <tr>
+                      <th scope="col">#</th>
+                      <th scope="col">Airline</th>
+                      <th scope="col">Route</th>
+                      <th scope="col">Departure</th>
+                      <th scope="col">Duration</th>
+                      <th scope="col">Stops</th>
+                      <th scope="col">Price (₽)</th>
+                      <th scope="col">Tags</th>
+                    </tr>
+                  </thead>
+                  <tbody id="hybrid-results"></tbody>
+                </table>
+              </div>
             </section>
           </div>
         </section>
       </main>
     </div>
 
-    <!-- App entry -->
+    <!-- Dynamic origin → destination options (Option A) -->
+    <script type="module">
+      (async () => {
+        try {
+          const res = await fetch("../data/flights_small.json");
+          if (!res.ok) {
+            console.error("Failed to load flights_small.json", res.status);
+            return;
+          }
+          const flights = await res.json();
+
+          // Build origin -> set(destinations) map
+          const originToDests = new Map();
+          const origins = new Set();
+
+          for (const f of flights) {
+            const origin = f.origin || f.Origin || f.departure || f.Departure;
+            const dest = f.dest || f.Destination || f.arrival || f.Arrival;
+
+            if (!origin || !dest) continue;
+            origins.add(origin);
+
+            if (!originToDests.has(origin)) {
+              originToDests.set(origin, new Set());
+            }
+            originToDests.get(origin).add(dest);
+          }
+
+          const originSelect = document.getElementById("origin-select");
+          const destinationSelect = document.getElementById("destination-select");
+
+          if (!originSelect || !destinationSelect) {
+            console.warn("Origin/Destination selects not found in DOM");
+            return;
+          }
+
+          // Populate origin dropdown
+          const sortedOrigins = Array.from(origins).sort();
+          originSelect.innerHTML = "";
+          for (const o of sortedOrigins) {
+            const opt = document.createElement("option");
+            opt.value = o;
+            opt.textContent = o;
+            originSelect.appendChild(opt);
+          }
+
+          // Helper: repopulate destinations when origin changes
+          function populateDestinationsForOrigin(originCode) {
+            const destSet = originToDests.get(originCode);
+            if (!destSet || destSet.size === 0) {
+              destinationSelect.innerHTML = "";
+              return;
+            }
+
+            const dests = Array.from(destSet).sort();
+            const current = destinationSelect.value;
+
+            destinationSelect.innerHTML = "";
+            for (const d of dests) {
+              const opt = document.createElement("option");
+              opt.value = d;
+              opt.textContent = d;
+              destinationSelect.appendChild(opt);
+            }
+
+            if (current && destSet.has(current)) {
+              destinationSelect.value = current;
+            } else {
+              destinationSelect.value = dests[0];
+            }
+          }
+
+          // Wire change listener
+          originSelect.addEventListener("change", () => {
+            populateDestinationsForOrigin(originSelect.value);
+          });
+
+          // Initial origin & destination
+          if (sortedOrigins.length > 0) {
+            originSelect.value = sortedOrigins[0];
+            populateDestinationsForOrigin(sortedOrigins[0]);
+          }
+        } catch (err) {
+          console.error("Error building origin/dest options", err);
+        }
+      })();
+    </script>
+
+    <!-- Existing app entry (your JS modules use the selects and tables above) -->
     <script type="module" src="./app.js"></script>
   </body>
 </html>
