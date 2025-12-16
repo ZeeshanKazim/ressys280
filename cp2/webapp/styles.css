@@ -51,7 +51,7 @@ body {
 /* ---------- Status messages ---------- */
 
 .status-message {
-  max-width: 1100px;
+  max-width: 1200px;
   margin: 0.75rem auto 0;
   padding: 0.5rem 0.75rem;
   font-size: 0.9rem;
@@ -65,7 +65,7 @@ body {
 /* ---------- Main layout ---------- */
 
 .app-main {
-  max-width: 1200px;
+  max-width: 1320px;        /* a bit wider → more space for tables */
   margin: 1.5rem auto 2rem;
   padding: 0 1.5rem 1.5rem;
 }
@@ -73,7 +73,7 @@ body {
 @media (min-width: 960px) {
   .app-main {
     display: grid;
-    grid-template-columns: 320px minmax(0, 1fr);
+    grid-template-columns: 260px minmax(0, 1fr); /* slightly smaller left, bigger right */
     gap: 2rem;
     align-items: flex-start;
   }
@@ -318,11 +318,12 @@ select:focus {
   display: block;
 }
 
-/* ---------- Scrollable table wrapper ---------- */
+/* ---------- Table wrapper ---------- */
 
 .table-wrapper {
   width: 100%;
-  overflow-x: auto;
+  /* No horizontal scroll – table will fit inside card */
+  overflow-x: visible;
   padding-bottom: 0.25rem;
 }
 
@@ -330,10 +331,9 @@ select:focus {
 
 .flight-table {
   width: 100%;
-  min-width: 760px; /* wide airline-style table */
   border-collapse: collapse;
-  font-size: 0.85rem;
-  table-layout: fixed; /* prevents header overflow */
+  font-size: 0.80rem;          /* slightly smaller so all columns fit */
+  table-layout: fixed;         /* stable layout, headers never overlap */
   background: #ffffff;
 }
 
@@ -344,7 +344,7 @@ select:focus {
 
 .flight-table th,
 .flight-table td {
-  padding: 0.5rem 0.55rem;
+  padding: 0.45rem 0.45rem;
   border-bottom: 1px solid #e5e7eb;
   vertical-align: middle;
   white-space: nowrap;
@@ -352,7 +352,8 @@ select:focus {
   text-overflow: ellipsis;
 }
 
-/* Column widths & alignment */
+/* Column widths & alignment so everything fits in view */
+
 .flight-table th:nth-child(1),
 .flight-table td:nth-child(1) {
   width: 6%;
@@ -361,12 +362,12 @@ select:focus {
 
 .flight-table th:nth-child(2),
 .flight-table td:nth-child(2) {
-  width: 18%;
+  width: 17%;
 }
 
 .flight-table th:nth-child(3),
 .flight-table td:nth-child(3) {
-  width: 16%;
+  width: 15%;
 }
 
 .flight-table th:nth-child(4),
@@ -375,22 +376,32 @@ select:focus {
 }
 
 .flight-table th:nth-child(5),
-.flight-table td:nth-child(5),
+.flight-table td:nth-child(5) {
+  width: 10%;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .flight-table th:nth-child(6),
-.flight-table td:nth-child(6),
+.flight-table td:nth-child(6) {
+  width: 9%;
+  text-align: right;
+}
+
 .flight-table th:nth-child(7),
 .flight-table td:nth-child(7) {
-  width: 10%;
-  text-align: right; /* numeric columns */
+  width: 9%;
+  text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
 .flight-table th:nth-child(8),
 .flight-table td:nth-child(8) {
-  width: 22%;
+  width: 16%;
 }
 
 /* Zebra striping + hover */
+
 .flight-table tbody tr:nth-child(odd) {
   background: #f9fafb;
 }
@@ -403,7 +414,8 @@ select:focus {
   background: #e0edff;
 }
 
-/* Tags cell can wrap */
+/* Tags cell can wrap a bit */
+
 .tags-cell {
   white-space: normal;
 }
