@@ -54,6 +54,9 @@ function renderBanner(hardConstraintsSatisfied) {
   }
 }
 
+/**
+ * Build a scrollable, fixed-layout table of flights.
+ */
 function renderTable(container, flights, columnType) {
   if (!flights || flights.length === 0) {
     const msg = document.createElement("div");
@@ -138,6 +141,7 @@ function renderTable(container, flights, columnType) {
     // Tags
     const tagsTd = document.createElement("td");
     tagsTd.className = "tags-cell";
+
     const tagsContainer = document.createElement("div");
     tagsContainer.className = "tags-container";
 
@@ -177,7 +181,13 @@ function renderTable(container, flights, columnType) {
   });
 
   table.appendChild(tbody);
-  container.appendChild(table);
+
+  // Scrollable wrapper to keep layout clean
+  const wrapper = document.createElement("div");
+  wrapper.className = "table-wrapper";
+  wrapper.appendChild(table);
+
+  container.appendChild(wrapper);
 }
 
 function formatPrice(p) {
