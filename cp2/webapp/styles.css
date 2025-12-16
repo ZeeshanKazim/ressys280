@@ -64,17 +64,19 @@ body {
 
 /* ---------- Main layout ---------- */
 
+/* Use the full browser width; left card closer to left edge */
 .app-main {
-  max-width: 1320px;        /* a bit wider → more space for tables */
-  margin: 1.5rem auto 2rem;
-  padding: 0 1.5rem 1.5rem;
+  max-width: 100%;
+  margin: 1.5rem 1.5rem 2rem;
+  padding-bottom: 1.5rem;
 }
 
 @media (min-width: 960px) {
   .app-main {
     display: grid;
-    grid-template-columns: 260px minmax(0, 1fr); /* slightly smaller left, bigger right */
-    gap: 2rem;
+    /* smaller left column, more space for tables */
+    grid-template-columns: 240px minmax(0, 1fr);
+    gap: 1.75rem;
     align-items: flex-start;
   }
 }
@@ -84,7 +86,7 @@ body {
 .controls-pane {
   background: #ffffff;
   border-radius: 1rem;
-  padding: 1.5rem 1.75rem;
+  padding: 1.4rem 1.6rem;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
 }
 
@@ -297,7 +299,7 @@ select:focus {
 .results-column {
   background: #ffffff;
   border-radius: 1rem;
-  padding: 1.25rem 1.5rem 1.5rem;
+  padding: 1.25rem 1.3rem 1.4rem;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.06);
 }
 
@@ -322,8 +324,7 @@ select:focus {
 
 .table-wrapper {
   width: 100%;
-  /* No horizontal scroll – table will fit inside card */
-  overflow-x: visible;
+  overflow-x: visible; /* no horizontal scroll, table must fit */
   padding-bottom: 0.25rem;
 }
 
@@ -332,37 +333,49 @@ select:focus {
 .flight-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.80rem;          /* slightly smaller so all columns fit */
-  table-layout: fixed;         /* stable layout, headers never overlap */
+  font-size: 0.78rem;        /* slightly smaller so all columns fit */
+  table-layout: fixed;       /* stable layout */
   background: #ffffff;
 }
 
 /* Header row */
+
 .flight-table thead {
   background: #f1f5f9;
 }
 
 .flight-table th,
 .flight-table td {
-  padding: 0.45rem 0.45rem;
+  padding: 0.40rem 0.42rem;
   border-bottom: 1px solid #e5e7eb;
   vertical-align: middle;
-  white-space: nowrap;
-  overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* Column widths & alignment so everything fits in view */
+/* HEADERS show full words, can wrap to 2 lines if needed */
+.flight-table th {
+  white-space: normal;
+  overflow: visible;
+  line-height: 1.2;
+}
+
+/* DATA stays on a single line, truncates if really long */
+.flight-table td {
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* Column widths & alignment – tuned so all headers fit on most laptops */
 
 .flight-table th:nth-child(1),
 .flight-table td:nth-child(1) {
-  width: 6%;
+  width: 4%;
   text-align: center;
 }
 
 .flight-table th:nth-child(2),
 .flight-table td:nth-child(2) {
-  width: 17%;
+  width: 18%;
 }
 
 .flight-table th:nth-child(3),
@@ -377,14 +390,14 @@ select:focus {
 
 .flight-table th:nth-child(5),
 .flight-table td:nth-child(5) {
-  width: 10%;
+  width: 11%;
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
 .flight-table th:nth-child(6),
 .flight-table td:nth-child(6) {
-  width: 9%;
+  width: 8%;
   text-align: right;
 }
 
@@ -397,7 +410,7 @@ select:focus {
 
 .flight-table th:nth-child(8),
 .flight-table td:nth-child(8) {
-  width: 16%;
+  width: 17%;
 }
 
 /* Zebra striping + hover */
