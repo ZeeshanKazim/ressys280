@@ -1,4 +1,4 @@
-/* ========== Global reset & variables ========== */
+/* ---------- Base layout & typography ---------- */
 
 *,
 *::before,
@@ -6,179 +6,130 @@
   box-sizing: border-box;
 }
 
-:root {
-  --bg-body: #f5f7fb;
-  --bg-card: #ffffff;
-  --bg-header: linear-gradient(90deg, #111827, #2563eb, #06b6d4);
-  --text-main: #111827;
-  --text-muted: #6b7280;
-  --border-soft: #e5e7eb;
-  --shadow-soft: 0 18px 45px rgba(15, 23, 42, 0.12);
-  --radius-lg: 1.5rem;
-  --radius-pill: 999px;
-  --accent: #2563eb;
-  --accent-soft: rgba(37, 99, 235, 0.12);
-  --accent-strong: #1d4ed8;
-}
-
-/* ========== Base typography ========== */
-
+html,
 body {
   margin: 0;
+  padding: 0;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
-  background: var(--bg-body);
-  color: var(--text-main);
+    Roboto, sans-serif;
+  background: #f3f4f6;
+  color: #0f172a;
 }
 
-/* Remove default form styles */
-
-button,
-input,
-select {
-  font-family: inherit;
+body {
+  min-height: 100vh;
 }
-
-/* ========== App shell ========== */
 
 .app-root {
   min-height: 100vh;
-  display: flex;
-  flex-direction: column;
 }
 
-/* Top gradient header */
+/* ---------- Header ---------- */
 
 .app-header {
-  background: var(--bg-header);
-  color: #f9fafb;
-  padding: 1.25rem 3rem;
+  padding: 1.5rem 2rem;
+  background: linear-gradient(135deg, #0f172a, #1d4ed8 60%, #22c1c3);
+  color: #eff6ff;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1.5rem;
-}
-
-.header-main {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
+  gap: 1rem;
 }
 
 .app-title {
   margin: 0;
-  font-size: 1.6rem;
+  font-size: 1.9rem;
   font-weight: 700;
 }
 
 .app-tagline {
-  margin: 0;
-  font-size: 0.9rem;
+  margin: 0.25rem 0 0;
+  font-size: 0.95rem;
   opacity: 0.9;
 }
 
-.header-pill {
-  padding: 0.5rem 1.25rem;
-  border-radius: var(--radius-pill);
-  background: rgba(15, 23, 42, 0.3);
-  border: 1px solid rgba(148, 163, 184, 0.6);
-  font-size: 0.8rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-/* ========== Status messages ========== */
+/* ---------- Status messages ---------- */
 
 .status-message {
+  max-width: 1100px;
   margin: 0.75rem auto 0;
-  max-width: 1120px;
-  padding: 0.7rem 1rem;
-  border-radius: 0.75rem;
-  font-size: 0.85rem;
-  background: #eff6ff;
-  color: #1d4ed8;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+  color: #4b5563;
 }
 
 .status-error {
-  background: #fef2f2;
   color: #b91c1c;
 }
 
-/* ========== Main layout ========== */
+/* ---------- Main layout ---------- */
 
 .app-main {
-  flex: 1;
-  display: flex;
-  gap: 1.75rem;
-  padding: 1.75rem 3rem 2.5rem;
+  max-width: 1200px;
+  margin: 1.5rem auto 2rem;
+  padding: 0 1.5rem 1.5rem;
 }
 
-/* Left constraints panel */
+@media (min-width: 960px) {
+  .app-main {
+    display: grid;
+    grid-template-columns: 320px minmax(0, 1fr);
+    gap: 2rem;
+    align-items: flex-start;
+  }
+}
+
+/* ---------- Controls pane ---------- */
 
 .controls-pane {
-  width: 320px;
-  flex-shrink: 0;
-  background: var(--bg-card);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-soft);
-  padding: 1.5rem 1.5rem 1.75rem;
-  display: flex;
-  flex-direction: column;
+  background: #ffffff;
+  border-radius: 1rem;
+  padding: 1.5rem 1.75rem;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
 }
 
 .pane-title {
-  margin: 0 0 1.25rem;
+  margin: 0 0 1rem;
   font-size: 1.1rem;
-  font-weight: 700;
+  font-weight: 600;
+  color: #111827;
 }
 
 .constraints-form {
   display: flex;
   flex-direction: column;
-  gap: 1.1rem;
+  gap: 0.9rem;
 }
 
 .form-field {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.25rem;
+}
+
+label {
   font-size: 0.9rem;
-}
-
-.form-field-inline {
-  flex-direction: row;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.form-field label {
   font-weight: 500;
+  color: #374151;
 }
 
-.field-hint {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-}
-
-input[type="number"],
 select {
-  padding: 0.55rem 0.6rem;
-  border-radius: 0.75rem;
+  border-radius: 0.6rem;
   border: 1px solid #d1d5db;
+  padding: 0.45rem 0.6rem;
   font-size: 0.9rem;
   outline: none;
   background: #f9fafb;
+  color: #111827;
 }
 
-input[type="number"]:focus,
 select:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.18);
+  border-color: #2563eb;
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.2);
   background: #ffffff;
 }
 
-/* Recommend button */
+/* Buttons */
 
 .form-actions {
   margin-top: 0.5rem;
@@ -186,394 +137,308 @@ select:focus {
 
 #recommend-button {
   width: 100%;
-  padding: 0.65rem 0.75rem;
-  border-radius: var(--radius-pill);
   border: none;
-  cursor: pointer;
-  font-weight: 600;
+  border-radius: 999px;
+  padding: 0.65rem 1.2rem;
   font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: linear-gradient(90deg, #2563eb, #22c1c3);
   color: #f9fafb;
-  background: linear-gradient(90deg, #2563eb, #06b6d4);
-  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.35);
+  box-shadow: 0 12px 25px rgba(37, 99, 235, 0.45);
   transition: transform 0.08s ease, box-shadow 0.08s ease,
-    filter 0.12s ease;
+    filter 0.08s ease;
 }
 
 #recommend-button:hover {
-  filter: brightness(1.04);
+  filter: brightness(1.05);
+  box-shadow: 0 16px 32px rgba(37, 99, 235, 0.55);
   transform: translateY(-1px);
-  box-shadow: 0 16px 38px rgba(37, 99, 235, 0.42);
 }
 
 #recommend-button:active {
   transform: translateY(0);
-  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.28);
+  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.4);
 }
 
-.form-footnote {
-  margin-top: 0.8rem;
-  font-size: 0.78rem;
-  color: var(--text-muted);
-  line-height: 1.35;
-}
-
-/* ========== Right pane (filters + tables) ========== */
+/* ---------- Results pane ---------- */
 
 .results-pane {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 1.2rem;
+  margin-top: 1.5rem;
 }
 
-/* Constraint warning banner above tables */
+@media (min-width: 960px) {
+  .results-pane {
+    margin-top: 0;
+  }
+}
 
 .constraints-banner {
-  display: none;
-  padding: 0.6rem 0.85rem;
-  border-radius: 0.9rem;
-  font-size: 0.82rem;
+  min-height: 1.5rem;
+  margin: 0.75rem 0;
+}
+
+.banner {
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.banner-warning {
   background: #fef3c7;
   color: #92400e;
   border: 1px solid #fbbf24;
 }
 
-/* Sort & filters card */
+/* ---------- Sort & Filters ---------- */
 
 .sort-filter-card {
-  background: var(--bg-card);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-soft);
-  padding: 1.1rem 1.35rem 1.1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.9rem;
+  background: #ffffff;
+  border-radius: 1rem;
+  padding: 0.9rem 1.1rem 1rem;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
 }
-
-.sort-filter-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-/* Pills for "Sort by" / "Filters" */
 
 .sort-filter-tabs {
   display: inline-flex;
+  border-radius: 999px;
   padding: 0.15rem;
-  border-radius: var(--radius-pill);
   background: #e5e7eb;
+  margin-bottom: 0.7rem;
 }
 
-.pill-switch {
+.sort-filter-tab {
   border: none;
   background: transparent;
-  border-radius: var(--radius-pill);
-  padding: 0.35rem 0.9rem;
-  font-size: 0.82rem;
+  padding: 0.3rem 0.9rem;
+  font-size: 0.85rem;
+  border-radius: 999px;
   cursor: pointer;
   color: #4b5563;
 }
 
-.pill-switch-active {
+.sort-filter-tab-active {
   background: #ffffff;
-  color: var(--accent-strong);
-  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.2);
+  color: #111827;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.1);
 }
 
-/* Sort radio row */
-
-.sort-options-row {
-  display: flex;
-  gap: 1rem;
-  align-items: center;
-  flex-wrap: wrap;
+.sort-filter-panel {
   font-size: 0.85rem;
-}
-
-.sort-radio-group {
-  display: inline-flex;
-  gap: 0.4rem;
-  flex-wrap: wrap;
-}
-
-.sort-radio-pill {
-  border-radius: var(--radius-pill);
-  border: 1px solid #d1d5db;
-  padding: 0.25rem 0.7rem;
-  font-size: 0.8rem;
-  background: #ffffff;
-  cursor: pointer;
   color: #374151;
 }
 
-.sort-radio-pill-active {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent-strong);
+.sort-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
 }
 
-/* Filters content */
-
-.filter-content {
+.sort-row label {
   display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  font-size: 0.82rem;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 .filter-row {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.3rem;
+  margin-top: 0.3rem;
 }
 
-.filter-row-label {
-  font-weight: 500;
-}
-
-.filter-row-sub {
-  color: var(--text-muted);
-}
-
-/* Range slider */
-
-#max-price-slider {
+#price-range {
   width: 100%;
 }
 
-/* Time-of-day filter pills */
+.filter-range-label {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
 
-.time-pill-row {
+/* Time-of-day chips */
+
+.time-bucket-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: 0.5rem;
 }
 
-.time-pill {
-  border-radius: var(--radius-pill);
+.time-chip {
+  border-radius: 999px;
   border: 1px solid #d1d5db;
-  padding: 0.25rem 0.7rem;
+  padding: 0.25rem 0.9rem;
   font-size: 0.8rem;
-  background: #ffffff;
-  cursor: pointer;
+  background: #f9fafb;
   color: #374151;
+  cursor: pointer;
 }
 
-.time-pill-active {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-  color: var(--accent-strong);
+.time-chip-active {
+  background: #2563eb;
+  border-color: #1d4ed8;
+  color: #eff6ff;
 }
 
-/* ========== Two results columns ========== */
+/* ---------- Results grid ---------- */
 
 .results-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1.25rem;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
 }
 
-/* Each column card */
+@media (min-width: 960px) {
+  .results-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
 
 .results-column {
-  background: var(--bg-card);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-soft);
-  padding: 1.2rem 1.4rem 1.35rem;
-  display: flex;
-  flex-direction: column;
-  min-width: 0; /* important with grid so tables can expand */
+  background: #ffffff;
+  border-radius: 1rem;
+  padding: 1.25rem 1.5rem 1.5rem;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.06);
 }
 
 .results-title {
   margin: 0 0 0.25rem;
-  font-size: 1.05rem;
-  font-weight: 700;
+  font-size: 1.2rem;
+  font-weight: 650;
+  color: #111827;
 }
 
 .results-subtitle {
-  margin: 0;
-  font-size: 0.8rem;
-  color: var(--text-muted);
+  margin: 0 0 0.9rem;
+  font-size: 0.84rem;
+  color: #6b7280;
 }
 
-/* ========== Table & rows – THIS FIXES OVERLAP ========== */
-
-/* Scrollable area for many flights */
 .results-list {
-  margin-top: 0.9rem;
-  max-height: 470px;
-  overflow-y: auto;
-  overflow-x: auto; /* if viewport is very narrow, allow horizontal scroll */
-  border-radius: 0.9rem;
+  display: block;
 }
 
-/* Main table */
-.results-table {
+/* ---------- Scrollable table wrapper ---------- */
+
+.table-wrapper {
   width: 100%;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+
+/* ---------- Flight tables ---------- */
+
+.flight-table {
+  width: 100%;
+  min-width: 760px; /* wide airline-style table */
   border-collapse: collapse;
-  table-layout: fixed;  /* prevents header cells from squishing unpredictably */
-  min-width: 720px;     /* enough room for all eight columns */
+  font-size: 0.85rem;
+  table-layout: fixed; /* prevents header overflow */
+  background: #ffffff;
 }
 
-/* Header & cells */
-.results-table th,
-.results-table td {
-  padding: 0.45rem 0.55rem;
-  text-align: left;
-  font-size: 0.8rem;
-  white-space: nowrap;  /* keep each column on one line */
+/* Header row */
+.flight-table thead {
+  background: #f1f5f9;
 }
 
-.results-table th {
-  font-weight: 600;
-  color: #1f2933;
-  border-bottom: 1px solid var(--border-soft);
-  background: #f9fafb;
-  position: sticky;
-  top: 0;
-  z-index: 1;
+.flight-table th,
+.flight-table td {
+  padding: 0.5rem 0.55rem;
+  border-bottom: 1px solid #e5e7eb;
+  vertical-align: middle;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* Light row separators */
-.results-table tr + tr td {
-  border-top: 1px solid #f3f4f6;
-}
-
-/* Column width tuning – prevents "Departure / Duration / Stops / Price / Tags" overlap */
-
-.results-table th:nth-child(1),
-.results-table td:nth-child(1) {
+/* Column widths & alignment */
+.flight-table th:nth-child(1),
+.flight-table td:nth-child(1) {
   width: 6%;
+  text-align: center;
 }
 
-.results-table th:nth-child(2),
-.results-table td:nth-child(2) {
-  width: 20%;
+.flight-table th:nth-child(2),
+.flight-table td:nth-child(2) {
+  width: 18%;
 }
 
-.results-table th:nth-child(3),
-.results-table td:nth-child(3) {
-  width: 14%;
-}
-
-.results-table th:nth-child(4),
-.results-table td:nth-child(4) {
+.flight-table th:nth-child(3),
+.flight-table td:nth-child(3) {
   width: 16%;
 }
 
-.results-table th:nth-child(5),
-.results-table td:nth-child(5) {
-  width: 12%;
+.flight-table th:nth-child(4),
+.flight-table td:nth-child(4) {
+  width: 18%;
 }
 
-.results-table th:nth-child(6),
-.results-table td:nth-child(6) {
-  width: 8%;
+.flight-table th:nth-child(5),
+.flight-table td:nth-child(5),
+.flight-table th:nth-child(6),
+.flight-table td:nth-child(6),
+.flight-table th:nth-child(7),
+.flight-table td:nth-child(7) {
+  width: 10%;
+  text-align: right; /* numeric columns */
+  font-variant-numeric: tabular-nums;
 }
 
-.results-table th:nth-child(7),
-.results-table td:nth-child(7) {
-  width: 11%;
+.flight-table th:nth-child(8),
+.flight-table td:nth-child(8) {
+  width: 22%;
 }
 
-.results-table th:nth-child(8),
-.results-table td:nth-child(8) {
-  width: 13%;
-}
-
-/* Rank # cell */
-
-.results-table td:first-child {
-  color: #4b5563;
-}
-
-/* Airline column: wrap second line slightly grayer */
-
-.airline-cell-main {
-  display: block;
-}
-
-.airline-cell-sub {
-  display: block;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-}
-
-/* Route column (DME → SVX) */
-
-.route-cell {
-  font-weight: 500;
-}
-
-/* Tags column badges (Top pick, Cheapest, Non-stop, etc.) */
-
-.tag-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.18rem 0.55rem;
-  border-radius: var(--radius-pill);
-  font-size: 0.72rem;
-  margin-right: 0.25rem;
-  margin-bottom: 0.15rem;
-  border: 1px solid #e5e7eb;
+/* Zebra striping + hover */
+.flight-table tbody tr:nth-child(odd) {
   background: #f9fafb;
-  color: #374151;
 }
 
-.tag-pill-primary {
+.flight-table tbody tr:nth-child(even) {
+  background: #ffffff;
+}
+
+.flight-table tbody tr:hover {
+  background: #e0edff;
+}
+
+/* Tags cell can wrap */
+.tags-cell {
+  white-space: normal;
+}
+
+/* ---------- Badges / tags ---------- */
+
+.tags-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.badge {
+  border-radius: 999px;
+  padding: 0.18rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  border: 1px solid transparent;
+}
+
+.badge-primary {
   background: #2563eb;
   color: #eff6ff;
   border-color: #1d4ed8;
 }
 
-.tag-pill-positive {
-  background: #ecfdf5;
-  color: #15803d;
-  border-color: #bbf7d0;
+.badge-neutral {
+  background: #e5e7eb;
+  color: #374151;
 }
 
-/* ========== Responsive tweaks ========== */
+/* ---------- Misc ---------- */
 
-@media (max-width: 1200px) {
-  .app-main {
-    flex-direction: column;
-  }
-
-  .controls-pane {
-    width: 100%;
-    max-width: 460px;
-  }
-
-  .results-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .results-table {
-    min-width: 640px;
-  }
-}
-
-@media (max-width: 768px) {
-  .app-header {
-    flex-direction: column;
-    align-items: flex-start;
-    padding: 1rem 1.25rem 1.1rem;
-  }
-
-  .app-main {
-    padding: 1.25rem 1.25rem 1.75rem;
-  }
-
-  .controls-pane {
-    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
-  }
-
-  .sort-filter-card,
-  .results-column {
-    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
-  }
+.no-results {
+  font-size: 0.9rem;
+  color: #6b7280;
+  padding: 0.5rem 0;
 }
